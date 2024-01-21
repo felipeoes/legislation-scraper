@@ -1,5 +1,5 @@
 import requests
-import time
+import fitz
 from os import environ
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from multiprocessing import Queue
 from src.database.saver import OneDriveSaver
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,10 +28,10 @@ TYPES = {  # dict with norm type and its id
 
 
 YEAR_START = 1808  # CHECK IF NECESSARY LATER
-ONEDRIVE_ALESP_SAVE_DIR = rf"{environ.get('ONEDRIVE_ALESP_SAVE_DIR')}"
+ONEDRIVE_STATE_LEGISLATION_SAVE_DIR = rf"{environ.get('ONEDRIVE_STATE_LEGISLATION_SAVE_DIR')}"
 
 
-class AlespScraper:
+class SaoPauloAlespScraper:
     """ Webscraper for Alesp (Assembleia Legislativa do Estado de São Paulo) website (https://www.al.sp.gov.br/) 
 
     Example search request url: # https://www.al.sp.gov.br/norma/resultados?page=0&size=500&tipoPesquisa=E&buscaLivreEscape=&buscaLivreDecode=&_idsTipoNorma=1&idsTipoNorma=3&nuNorma=&ano=&complemento=&dtNormaInicio=&dtNormaFim=&idTipoSituacao=1&_idsTema=1&palavraChaveEscape=&palavraChaveDecode=&_idsAutorPropositura=1&_temQuestionamentos=on&_pesquisaAvancada=on
@@ -39,7 +40,8 @@ class AlespScraper:
     def __init__(self,  base_url: str = "https://www.al.sp.gov.br/norma/resultados",
                  types: dict = TYPES,
                  year_start: int = YEAR_START, year_end: int = datetime.now().year,
-                 docs_save_dir: str = ONEDRIVE_ALESP_SAVE_DIR,
+                 docs_save_dir: str = Path(
+                     ONEDRIVE_STATE_LEGISLATION_SAVE_DIR) / 'SAO_PAULO',
                  verbose: bool = False):
         self.base_url = base_url
         self.types = types
@@ -83,7 +85,7 @@ class AlespScraper:
     def _format_search_url(self, year: str, norm_type_id: int):
         """ Format url for search request """
         self.params['ano'] = year
-        self.params['_idsTipoNorma'] = norm_type_id
+        self.params['idsTipoNorma'] = norm_type_id
         return self.base_url + "?" + "&".join([f"{key}={value}" for key, value in self.params.items()])
 
     def _get_soup(self, url: str) -> BeautifulSoup:
@@ -95,14 +97,6 @@ class AlespScraper:
     def _get_docs_html_links(self, url: str) -> list:
         """ Get documents html links from given page.
             Returns a list of dicts with keys 'title', 'summary', 'html_link' """
-        # <tr class="odd">
-        # 							<td width="40%">
-        # 								<a target="_blank" href="/repositorio/legislacao/resolucao.alesp/2023/resolucao.alesp-941-04.12.2023.html"><img src="https://www.al.sp.gov.br/_img/fichaNP/ico_texto.png"></a>
-        # 								<a target="_blank" href="/norma/publicacao/208880"><img src="https://www.al.sp.gov.br/_img/fichaNP/ico_DO.png"></a>
-        # 								<a class="link_norma" href="/norma/208880"><span>Resolução da Alesp nº 941, de 04/12/2023</span></a>
-        # 							</td>
-        # 							<td><span>Altera a <a target="_blank" class="anotacao-link" href="/norma/5191">Resolução nº 805, de 3 de maio de 2000</a>, que dispõe sobre a afiliação da ALESP à União Nacional dos Legislativos Estaduais - UNALE.</span></td>
-        # 						</tr>
         soup = self._get_soup(url)
 
         # Get all documents html links from page
@@ -111,10 +105,14 @@ class AlespScraper:
         for tr in trs:
             tds = tr.find_all('td')
             if len(tds) == 2:
+                if 'Mostrando'.lower() in tds[0].text.strip().lower():
+                    continue
                 title = tds[0].find('span').text
                 summary = tds[1].find('span').text
                 # first <a> tag which contains the html link for the html document
-                html_link = tds[0].find('a', href=True)['href']
+                url = tds[0].find('a', href=True)['href']
+                html_link = requests.compat.urljoin(
+                    self.base_url.replace('/norma/resultados', ''), url)
                 docs_html_links.append(
                     {'title': title, 'summary': summary, 'html_link': html_link})
 
@@ -122,23 +120,34 @@ class AlespScraper:
 
     def _get_doc_data(self, doc_info: dict) -> dict:
         """ Get document data from given html link """
-#       <body>
-# <a href="https://www.al.sp.gov.br">Assembleia Legislativa do Estado de São Paulo</a>
-# <a href="/norma/208880">Ficha informativa</a><br>
-# <h1>RESOLUÇÃO DA ALESP N° 941, DE 04 DE DEZEMBRO DE 2023</h1>
-# <h2>(Projeto de Resolução n° 49, de 2023)</h2><h3>Altera a Resolução n° 805, de 3 de maio de 2000, que dispõe sobre a afiliação da ALESP à União Nacional dos Legislativos Estaduais - UNALE.</h3>
-# <p>O PRESIDENTE DA ASSEMBLEIA LEGISLATIVA DO ESTADO DE SÃO PAULO, no uso da atribuição que lhe confere a alínea "h" do inciso II do artigo 18 do Regimento Interno, promulga a seguinte resolução:</p><p><strong>Artigo 1° - </strong>O § 2° do artigo 1° da <a data-idanotacao="5191" class="anotacao-link" target="blank" href="https://www.al.sp.gov.br/norma/5191">Resolução n° 805, de 3 de maio de 2000</a>, passa a vigorar com nova redação, e fica acrescido a esse artigo o § 3°, na seguinte conformidade:</p><p>"Artigo 1°- (...)</p><p>§ 2° - Fica a Mesa da Assembleia Legislativa autorizada a firmar termo de cooperação com a UNALE que discipline de maneira pormenorizada ações de fortalecimento do Poder Legislativo Estadual junto aos demais Poderes constituídos. (NR)</p><p>§ 3° - Enquanto perdurar a vigência do termo de cooperação a que se refere o § 2° deste artigo, fica a ALESP autorizada a transferir à UNALE o valor referente ao pagamento das mensalidades da associação, não se aplicando a sistemática da Lei Federal n° 13.019, de 31 de julho de 2014, em razão do disposto no artigo 3°, inciso IX, do referido diploma."</p><p><strong>Artigo 2° - </strong>As despesas decorrentes da execução desta resolução correrão à conta das dotações orçamentárias próprias, suplementadas, se necessário.</p><p><strong>Artigo 3° - </strong>Esta resolução entra em vigor na data de sua publicação.</p><p>Assembleia Legislativa do Estado de São Paulo, em 4/12/2023.</p><p>ANDRÉ DO PRADO - Presidente</p>
-
-# </body>
         doc_html_link = doc_info['html_link']
+
+        # check if pdf
+        if doc_html_link.endswith('.pdf'):
+            pdf_content = requests.get(doc_html_link).content
+
+            # read pdf content
+            doc = fitz.open(stream=pdf_content, filetype="pdf")
+            pdf_text = ""
+            for page in doc:
+                pdf_text += page.get_text()
+
+            return {
+                "title": doc_info['title'],
+                "summary": doc_info['summary'],
+                "pdf_text": pdf_text,
+                "document_url": doc_html_link
+            }
+
         soup = self._get_soup(doc_html_link)
 
         # remove a tags with 'Assembleia Legislativa do Estado de São Paulo' and 'Ficha informativa'
         for a in soup.find_all('a'):
             a_text = a.text.lower()
-            if a_text == 'Assembleia Legislativa do Estado de São Paulo'.lower() or a_text == 'Ficha informativa'.lower():
+            a_href = a.get('href', '').lower()
+            if 'Assembleia Legislativa do Estado de São Paulo'.lower() in a_text or 'Ficha informativa'.lower() in a_text or 'http://www.al.sp.gov.br'.lower() in a_href or 'https://www.al.sp.gov.br'.lower() in a_href:
                 a.decompose()
-        
+
         # get data
         html_string = soup.body.prettify(formatter='html')
 
@@ -161,13 +170,6 @@ class AlespScraper:
                 continue
 
             # get number of pages
-            # <h5 class="mt-3">
-                # <b>
-                # 	<span>Resultado: 923 normas em 2</span>
-                # 	<span>páginas</span>
-
-                # </b>
-                # </h5>
             total = soup.find(
                 'span', text='página').previous_sibling.previous_sibling.text
             total = int(total.strip().split()[-1])
@@ -223,8 +225,16 @@ class AlespScraper:
         # start saver thread
         self.saver.start()
 
+        # check if can resume from last scrapped year
+        resume_from = YEAR_START  # 1808
+        if self.saver.last_year is not None:
+            resume_from = int(self.saver.last_year)
+
         # scrape data from all years
         for year in tqdm(self.years, desc="ALESP | Years", total=len(self.years)):
+            if int(year) < resume_from:
+                continue
+
             self._scrape_year(year)
 
         # stop saver thread

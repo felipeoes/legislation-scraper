@@ -9,20 +9,34 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ONEDRIVE_SAVE_DIR = rf"{environ.get('ONEDRIVE_SAVE_DIR')}"
-ERROR_LOG_DIR = rf"{environ.get('ERROR_LOG_DIR', 'logs')}"
+ERROR_LOG_DIR = rf"{environ.get('ERROR_LOG_DIR', 'logs/federal_legislation')}"
 print(f"Default saving to {ONEDRIVE_SAVE_DIR}")
 
 
 class OneDriveSaver(Thread):
     """ Background thread to save data to txt files in OneDrive folder """
 
-    def __init__(self, queue: Queue, error_queue: Queue, save_dir: str = ONEDRIVE_SAVE_DIR):
+    def __init__(self, queue: Queue, error_queue: Queue, save_dir: str = ONEDRIVE_SAVE_DIR, error_log_dir: str = ERROR_LOG_DIR):
         super().__init__()
         self.queue = queue
         self.error_queue = error_queue
         self.save_dir = save_dir
+        self.error_log_dir = error_log_dir
         self.lock = Lock()
         self.running = True
+        self.last_year = None
+        self.set_last_year()
+
+    def set_last_year(self):
+        """ Set the last year that was saved """
+        save_dir = Path(self.save_dir)
+        if not save_dir.exists():
+            self.last_year = None
+            return
+
+        years = [int(year.name)
+                 for year in save_dir.iterdir() if year.is_dir()]
+        self.last_year = max(years) if years else None
 
     def run(self):
         while self.running:
@@ -56,7 +70,7 @@ class OneDriveSaver(Thread):
     def save_error(self, data: dict):
         """ Save error data to txt file. Data will be a dict with keys {"title": title, "year": self.params["ano"], "situation": self.params["situacao"], "type": self.params["tipo"], "summary": summary, "html_link": document_html_link}. Folder structure will be 'ERROR_LOG_DIR/{year}/{type}/{situation}/{title}_{document_url}.json """
         with self.lock:
-            save_dir = Path(ERROR_LOG_DIR)
+            save_dir = Path(self.error_log_dir)
             year_dir = save_dir / data['year']
             type_dir = year_dir / data['type']
             situation_dir = type_dir / data['situation']

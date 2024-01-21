@@ -245,12 +245,19 @@ class CamaraDepScraper:
 
     def scrape(self) -> list:
         """ Scrape data from all years """
-
         # start saver thread
         self.saver.start()
+        
+        # check if can resume from last scrapped year
+        resume_from = YEAR_START  # 1808
+        if self.saver.last_year is not None:
+            resume_from = int(self.saver.last_year)
 
         # scrape data from all years
         for year in tqdm(self.years, desc="CamaraDEP | Years", total=len(self.years)):
+            if int(year) < resume_from:
+                continue
+            
             self._scrape_year(year)
 
         # stop saver thread
