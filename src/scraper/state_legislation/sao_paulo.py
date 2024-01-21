@@ -1,5 +1,7 @@
 import requests
 import fitz
+import time
+
 from os import environ
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -90,9 +92,16 @@ class SaoPauloAlespScraper:
 
     def _get_soup(self, url: str) -> BeautifulSoup:
         """ Get BeautifulSoup object from given url """
-        response = requests.get(url, headers=self.headers)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        return soup
+        retries = 3
+        for _ in range(retries):
+            try:
+                response = requests.get(url, headers=self.headers)
+                soup = BeautifulSoup(response.content, 'html.parser')
+                return soup
+            except Exception as e:
+                print(f"Error {e} while getting soup for {url}. Retrying...")
+                time.sleep(5)
+                continue
 
     def _get_docs_html_links(self, url: str) -> list:
         """ Get documents html links from given page.
