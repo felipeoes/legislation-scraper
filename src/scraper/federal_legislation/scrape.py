@@ -18,9 +18,9 @@ YEAR_START = 1808  # CHECK IF NECESSARY LATER
 
 
 class CamaraDepScraper:
-    """ Scraper for Camara dos Deputados website (https://www.camara.leg.br/legislacao/)
+    """ Webscraper for Camara dos Deputados website (https://www.camara.leg.br/legislacao/)
 
-    Ex search request url: https://www.camara.leg.br/legislacao/busca?geral=&ano=&situacao=&abrangencia=&tipo=Decreto%2CDecreto+Legislativo%2CDecreto-Lei%2CEmenda+Constitucional%2CLei+Complementar%2CLei+Ordin%C3%A1ria%2CMedida+Provis%C3%B3ria%2CResolu%C3%A7%C3%A3o+da+C%C3%A2mara+dos+Deputados%2CConstitui%C3%A7%C3%A3o%2CLei%2CLei+Constitucional%2CPortaria%2CRegulamento%2CResolu%C3%A7%C3%A3o+da+Assembl%C3%A9ia+Nacional+Constituinte%2CResolu%C3%A7%C3%A3o+do+Congresso+Nacional%2CResolu%C3%A7%C3%A3o+do+Senado+Federal&origem=&numero=&ordenacao=data%3AASC
+    Example search request url: https://www.camara.leg.br/legislacao/busca?geral=&ano=&situacao=&abrangencia=&tipo=Decreto%2CDecreto+Legislativo%2CDecreto-Lei%2CEmenda+Constitucional%2CLei+Complementar%2CLei+Ordin%C3%A1ria%2CMedida+Provis%C3%B3ria%2CResolu%C3%A7%C3%A3o+da+C%C3%A2mara+dos+Deputados%2CConstitui%C3%A7%C3%A3o%2CLei%2CLei+Constitucional%2CPortaria%2CRegulamento%2CResolu%C3%A7%C3%A3o+da+Assembl%C3%A9ia+Nacional+Constituinte%2CResolu%C3%A7%C3%A3o+do+Congresso+Nacional%2CResolu%C3%A7%C3%A3o+do+Senado+Federal&origem=&numero=&ordenacao=data%3AASC
     """
 
     def __init__(self, base_url: str = "https://www.camara.leg.br/legislacao/",
@@ -54,7 +54,9 @@ class CamaraDepScraper:
                 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"
         }
         self.queue = Queue()
-        self.saver = OneDriveSaver(self.queue, save_dir=self.docs_save_dir)
+        self.error_queue = Queue()
+        self.saver = OneDriveSaver(
+            self.queue, self.error_queue, self.docs_save_dir)
         self.results = []
         self.count = 0  # keep track of number of results
         self.soup = None
@@ -70,16 +72,30 @@ class CamaraDepScraper:
         url = self.base_url + "busca?" + \
             "&".join([f"{key}={value}" for key, value in self.params.items()])
 
-        # # add types to url
-        # for type in self.types:
-        #     url += f"&tipo={type}"
-
         return url
 
     def _get_soup(self, url: str) -> BeautifulSoup:
         """ Get BeautifulSoup object from given url """
-        response = requests.get(url, headers=self.headers)
+        retries = 3
+        for _ in range(retries):
+            try:
+                response = requests.get(url, headers=self.headers)
+
+                # check  "O servidor encontrou um erro interno, ou está sobrecarregado" error
+                if "O servidor encontrou um erro interno, ou está sobrecarregado" in response.text:
+                    print("Server error, retrying...")
+                    time.sleep(5)
+                    continue
+
+                break
+            except Exception as e:
+                print(f"Error getting response from url: {url}")
+                print(e)
+                time.sleep(5)
+
         return BeautifulSoup(response.text, "html.parser")
+        # response = requests.get(url, headers=self.headers)
+        # return BeautifulSoup(response.text, "html.parser")
 
     def _get_documents_html_links(self, url: str) -> "list[dict]":
         """ Get html links from given url. Returns a list of dictionaries in the format {
@@ -110,9 +126,13 @@ class CamaraDepScraper:
         soup = self._get_soup(document_html_link)
         document_text_links = soup.find("div", class_="sessao")
         if not document_text_links:
-            print(f"Could not find text link for document: {title}") # probably link doesn't exist (error in website)
+            # probably link doesn't exist (error in website)
+            print(f"Could not find text link for document: {title}")
+            error_data = {"title": title, "year": self.params["ano"], "situation": self.params["situacao"],
+                          "type": self.params["tipo"], "summary": summary, "html_link": document_html_link}
+            self.error_queue.put(error_data)
             return None
-        
+
         document_text_links = document_text_links.find_all("a")
         document_text_link = None
         for link in document_text_links:
@@ -138,15 +158,24 @@ class CamaraDepScraper:
         }"""
         soup = self._get_soup(document_text_link)
 
-        # get html string
-        html_string = soup.find(
-            "div", class_="textoNorma").prettify(formatter='html')
-        return {"title": title, "summary": summary, "html_string": html_string, "document_url": document_text_link}
+        try:
+            # get html string
+            html_string = soup.find(
+                "div", class_="textoNorma").prettify(formatter='html')
+            return {"title": title, "summary": summary, "html_string": html_string, "document_url": document_text_link}
+        except Exception as e:
+            print(f"Error getting html string for document: {title}")
+            print(e)
+            error_data = {"title": title, "year": self.params["ano"], "situation": self.params["situacao"],
+                          "type": self.params["tipo"], "summary": summary, "html_link": document_text_link}
+            self.error_queue.put(error_data)
+            return None
 
     def _scrape_year(self, year: str) -> list:
         """ Scrape data from given year """
-        results = []
-        for situation in tqdm(self.situations, desc="Situations", total=len(self.situations)):
+        for situation in tqdm(self.situations, desc="CamaraDEP | Situations", total=len(self.situations)):
+            results = []
+
             for type in self.types:
                 url = self._format_search_url(year, situation, type)
                 # Each page has 20 results, find the total and calculate the number of pages
@@ -169,8 +198,8 @@ class CamaraDepScraper:
                     documents_html_links_info = []
                     futures = [executor.submit(
                         self._get_documents_html_links, url + f"&pagina={page}") for page in range(1, pages + 1)]
-                    for future in tqdm(as_completed(futures), desc="Pages", 
-                                    #    disable=not self.verbose,
+                    for future in tqdm(as_completed(futures), desc="CamaraDEP |Pages",
+                                       #    disable=not self.verbose,
                                        total=len(futures)):
                         documents_html_links_info.extend(future.result())
 
@@ -182,7 +211,7 @@ class CamaraDepScraper:
                         "title"), document_html_link.get("summary"))
                         for document_html_link in documents_html_links_info if document_html_link is not None])
 
-                    for future in tqdm(as_completed(futures), desc="Text link", total=len(futures)):
+                    for future in tqdm(as_completed(futures), desc="CamaraDEP | Text link", total=len(futures)):
                         documents_text_links.append(future.result())
 
                 # Get data from all  documents text links using ThreadPoolExecutor
@@ -192,8 +221,11 @@ class CamaraDepScraper:
                         "title"), document_text_link.get("summary"))
                         for document_text_link in documents_text_links if document_text_link is not None]
 
-                    for future in tqdm(as_completed(futures), desc="Documents text", total=len(futures)):
+                    for future in tqdm(as_completed(futures), desc="CamaraDEP |Documents text", total=len(futures)):
                         result = future.result()
+
+                        if result is None:
+                            continue
 
                         # save to onedrive
                         queue_item = {
@@ -203,7 +235,7 @@ class CamaraDepScraper:
                             **result
                         }
                         self.queue.put(queue_item)
-                        results.append(result)
+                        results.append(queue_item)
 
                 self.results.extend(results)
                 self.count += len(results)
@@ -218,7 +250,7 @@ class CamaraDepScraper:
         self.saver.start()
 
         # scrape data from all years
-        for year in tqdm(self.years, desc="Years", total=len(self.years)):
+        for year in tqdm(self.years, desc="CamaraDEP | Years", total=len(self.years)):
             self._scrape_year(year)
 
         # stop saver thread
