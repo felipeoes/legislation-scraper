@@ -52,7 +52,7 @@ class OneDriveSaver(Thread):
         """ Save data to json file. Data will be a dict with keys 'title', 'year', 'situation', 'type', 'summary', 'html_string' and 'document_url'. Folder structure will be 'ONEDRIVE_SAVE_DIR/{year}/{type}/{situation}/{title}_{document_url}.json' """
         with self.lock:
             save_dir = Path(self.save_dir)
-            year_dir = save_dir / data['year']
+            year_dir = save_dir / str(data['year'])
             type_dir = year_dir / data['type']
             situation_dir = type_dir / data['situation']
 
@@ -71,7 +71,7 @@ class OneDriveSaver(Thread):
         """ Save error data to txt file. Data will be a dict with keys {"title": title, "year": self.params["ano"], "situation": self.params["situacao"], "type": self.params["tipo"], "summary": summary, "html_link": document_html_link}. Folder structure will be 'ERROR_LOG_DIR/{year}/{type}/{situation}/{title}_{document_url}.json """
         with self.lock:
             save_dir = Path(self.error_log_dir)
-            year_dir = save_dir / data['year']
+            year_dir = save_dir / str(data['year'])
             type_dir = year_dir / data['type']
             situation_dir = type_dir / data['situation']
 

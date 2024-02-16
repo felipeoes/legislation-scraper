@@ -51,7 +51,7 @@ class SaoPauloAlespScraper:
         self.year_end = year_end
         self.verbose = verbose
         self.docs_save_dir = docs_save_dir
-        self.years = [str(year) for year in range(
+        self.years = [year for year in range(
             self.year_start, self.year_end + 1)]
         self.params = {
             "size": 500,
@@ -84,7 +84,7 @@ class SaoPauloAlespScraper:
         self.count = 0  # keep track of number of results
         self.soup = None
 
-    def _format_search_url(self, year: str, norm_type_id: int):
+    def _format_search_url(self, year: str, norm_type_id: int) -> str:
         """ Format url for search request """
         self.params['ano'] = year
         self.params['idsTipoNorma'] = norm_type_id
@@ -152,13 +152,19 @@ class SaoPauloAlespScraper:
 
         # remove a tags with 'Assembleia Legislativa do Estado de São Paulo' and 'Ficha informativa'
         for a in soup.find_all('a'):
+            if a.decomposed:
+                continue
+
             a_text = a.text.lower()
             a_href = a.get('href', '').lower()
             if 'Assembleia Legislativa do Estado de São Paulo'.lower() in a_text or 'Ficha informativa'.lower() in a_text or 'http://www.al.sp.gov.br'.lower() in a_href or 'https://www.al.sp.gov.br'.lower() in a_href:
                 a.decompose()
 
         # get data
-        html_string = soup.body.prettify(formatter='html')
+        if soup.body:
+            html_string = soup.body.prettify(formatter='html')
+        else:
+            html_string = soup.prettify(formatter='html')
 
         return {
             "title": doc_info['title'],
@@ -180,7 +186,11 @@ class SaoPauloAlespScraper:
 
             # get number of pages
             total = soup.find(
-                'span', text='página').previous_sibling.previous_sibling.text
+                'span', text='página')
+            if total is None:
+                total = soup.find(
+                    'span', text='páginas')
+            total = total.previous_sibling.previous_sibling.text
             total = int(total.strip().split()[-1])
 
             if total == 0:
@@ -219,6 +229,7 @@ class SaoPauloAlespScraper:
                         "type": norm_type,
                         **result
                     }
+
                     self.queue.put(queue_item)
                     results.append(queue_item)
 
@@ -241,7 +252,7 @@ class SaoPauloAlespScraper:
 
         # scrape data from all years
         for year in tqdm(self.years, desc="ALESP | Years", total=len(self.years)):
-            if int(year) < resume_from:
+            if year < resume_from:
                 continue
 
             self._scrape_year(year)
