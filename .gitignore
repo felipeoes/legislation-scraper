@@ -161,4 +161,6 @@ cython_debug/
 
 # project
 # ignore all under csv-datasets folder
+csv-datasets
 csv-datasets/*
+.vscode

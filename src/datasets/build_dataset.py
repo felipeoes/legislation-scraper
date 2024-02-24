@@ -1,17 +1,22 @@
-from dotenv import load_dotenv
-from markdownify import markdownify as md
-from urllib.parse import unquote
-from pathlib import Path
 import re
 import os
 import pandas as pd
 import warnings
+import sys
+import time
 
-from threading import Thread, Lock
-from multiprocessing import Queue, cpu_count
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datasets import Dataset
 from tqdm import tqdm
+from datasets import Dataset
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from multiprocessing import Queue, cpu_count
+from threading import Thread, Lock
+from dotenv import load_dotenv
+from markdownify import markdownify as md
+from urllib.parse import unquote
+from pathlib import Path
+
+sys.setrecursionlimit(5000)
+
 
 # remove pd warning
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -30,16 +35,32 @@ class BackgroundSaver(Thread):
         Thread.__init__(self)
         self.queue = queue
         self.output_path = output_path
+        self.wait_time = 10
+        self.retries = 3
         self.stop = False
 
     def run(self):
         while not self.stop:
-            # get data from queue
-            data: pd.DataFrame = self.queue.get()
+            try:
+                # get data from queue
+                data: pd.DataFrame = self.queue.get(timeout=self.wait_time)
 
-            # save data
-            data = data.drop_duplicates(subset=["document_url"])
-            data.to_csv(self.output_path, index=False)
+                # save data
+                data = data.drop_duplicates(subset=["document_url"])
+                data.to_csv(self.output_path, index=False)
+
+                print(f"Saved {data.shape[0]} rows to {self.output_path}")
+                self.retries = 3  # reset retries
+
+            except Exception as e:
+                # if timeou 3 times, exit
+                print(f"Exception encountered: {e}")
+
+                self.retries -= 1
+                if self.retries == 0:
+                    self.stop = True
+                    print(f"Exception encountered, probably work is done: {e}")
+                    break
 
 
 class DatasetBuilder:
@@ -124,15 +145,16 @@ class DatasetBuilder:
     def _read_json(self, path: str, index: int, total: int):
         try:
             if path:
-                data = pd.read_json(path, typ="series", encoding="utf-8").to_dict()
+                data = pd.read_json(path, typ="series",
+                                    encoding="utf-8").to_dict()
 
                 # check if 'html_string' or 'pdf_content' is empty
                 if "html_string" in data and not data["html_string"]:
                     return
-                
+
                 if "pdf_content" in data and not data["pdf_content"]:
                     return
-                
+
                 with self.lock:
                     self.data.append(data)
 
@@ -157,7 +179,7 @@ class DatasetBuilder:
 
         # load data from json files
         # save_every = 500
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=(cpu_count() // 2) - 1) as executor:
             futures = []
 
             for index, path in enumerate(
@@ -165,7 +187,8 @@ class DatasetBuilder:
             ):
                 if path.is_file():
                     futures.append(
-                        executor.submit(self._read_json, path, index, len(paths))
+                        executor.submit(self._read_json, path,
+                                        index, len(paths))
                     )
 
             for future in tqdm(as_completed(futures), total=len(futures)):
@@ -175,9 +198,13 @@ class DatasetBuilder:
         self, dataset_name: str, output_path: Path = DIR_PATH / "dataset.csv"
     ):
         """Build dataset from json files"""
+        # wait for background saver to finish
+        while not self.queue.empty():
+            time.sleep(5)
 
         # drop duplicates based on 'document_url' column ( May have duplicates because of the types "{norm_type} Sem Número")
-        df_pd = pd.DataFrame(self.data).drop_duplicates(subset=["document_url"])
+        df_pd = pd.DataFrame(self.data).drop_duplicates(
+            subset=["document_url"])
 
         print(f"Dataset shape: {df_pd.shape}")
         print(f"Dataset columns: {df_pd.columns}")
@@ -193,17 +220,25 @@ class DatasetBuilder:
         elif "pdf_content" in df_pd.columns:
             df_pd.rename(columns={"pdf_content": "text"}, inplace=True)
 
+        # check progress
+        tqdm.pandas()
+
         # convert html or pdf to markdown. Remove img and a tags. Regex replaces four or more '\n' with three '\n'
         regex = re.compile(r"\n{4,}")
-        df_pd["text"] = df_pd["text"].apply(
+        df_pd["text"] = df_pd["text"].progress_apply(
             lambda x: regex.sub(
                 "\n\n\n", md(x, heading_style="ATX", strip=["img", "a"])
             ).strip()
         )
 
         # sanitize columns
-        df_pd["type"] = df_pd["type"].apply(lambda x: unquote(x))
-        df_pd["situation"] = df_pd["situation"].apply(lambda x: unquote(x))
+        cols = ["type", "situation", "summary"]
+
+        for col in cols:
+            if col in df_pd.columns:
+                df_pd[col] = df_pd[col].apply(unquote)
+
+        df_pd["year"] = df_pd["year"].astype(int)
 
         # save without index
         df_pd.to_csv(output_path, index=False)
@@ -216,16 +251,15 @@ class DatasetBuilder:
         dataset.push_to_hub(dataset_name, token=HUGGINGFACE_TOKEN)
 
 
-# test
-try:
-    output_dir = Path(__file__).resolve().parents[2] / "csv-datasets"
-    output_path = output_dir / "dataset.csv"
-    dir_path = DIR_PATH / "LEGISLACAO_FEDERAL"
-    builder = DatasetBuilder(dir_path, output_path)
-    dataset_name = "felipeoes/br_federal_legislation"
-    # builder.build_dataset(dataset_name, output_path=dir_path / "dataset.csv")
-    # 'csv-datasets' folder is two levels above the current folder
-   
-    builder.build_dataset(dataset_name, output_path=output_path) 
-except KeyboardInterrupt:
-    print("Interrupted")
+if __name__ == "__main__":
+    # test
+    try:
+        output_dir = Path(__file__).resolve().parents[2] / "csv-datasets"
+        output_path = output_dir / "dataset.csv"
+        dir_path = DIR_PATH / "LEGISLACAO_FEDERAL"
+        builder = DatasetBuilder(dir_path, output_path)
+        dataset_name = "felipeoes/br_federal_legislation"
+
+        builder.build_dataset(dataset_name, output_path=output_path)
+    except KeyboardInterrupt:
+        print("Interrupted")
