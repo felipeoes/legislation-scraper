@@ -8,6 +8,7 @@ from threading import Thread, Lock
 from multiprocessing import Queue
 from urllib.parse import unquote
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 load_dotenv()
 
@@ -53,27 +54,30 @@ class OneDriveSaver(Thread):
         self.last_year = max(years) - 1 if years else None
 
     def run(self):
-        retries = 360  # 30 minutes
+        retries = 120  # 10 minutes
         while self.running and retries > 0:
+            if self.queue.empty() and self.error_queue.empty():
+                retries -= 1
+                time.sleep(5)
+                continue
+
             if not self.queue.empty():
                 data = self.queue.get()
                 self.save(data)
                 retries = 120
-                continue
 
             if not self.error_queue.empty():
                 data = self.error_queue.get()
                 self.save_error(data)
                 retries = 120
-                continue
-
-            retries -= 1
-            time.sleep(5)
 
         # get all remaining data in queue
+        print(f"Saving remaining {self.queue.qsize()} data in queue")
+        progress = tqdm(total=self.queue.qsize())
         while not self.queue.empty():
             data = self.queue.get()
             self.save(data)
+            progress.update(1)
 
         print(
             f"{self.__class__.__name__} stopped since {retries} retries reached and running is {self.running}"
@@ -121,7 +125,7 @@ class OneDriveSaver(Thread):
 
                 # save json
                 with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=4)
+                    json.dump(data, f, ensure_ascii=True, indent=4)
 
             except Exception as e:
                 print(f"Error saving {data['title']} to {file_path}: {e}")

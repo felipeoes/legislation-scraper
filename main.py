@@ -5,7 +5,7 @@ from src.scraper.state_legislation.rio_de_janeiro import RJAlerjScraper
 if __name__ == "__main__":
 
     try:
-        camara_scraper = CamaraDepScraper(verbose=False, year_start=1991)
+        camara_scraper = CamaraDepScraper(verbose=False, year_start=1976, year_end=1976)
         data = camara_scraper.scrape()
         print(f"Scraped {len(data)} data for Camara dos Deputados")
 
@@ -22,4 +22,5 @@ if __name__ == "__main__":
         camara_scraper.saver.join()
         print("KeyboardInterrupt: Exiting...")
 
+    print("Exiting...")
     exit(0)
