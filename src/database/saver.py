@@ -41,9 +41,11 @@ class OneDriveSaver(Thread):
         self.lock = Lock()
         self.running = True
         self.last_year = None
-        self.set_last_year()
+        self._set_last_year()
+        print(f"Saving to {save_dir}")
+        print(f"Saving errors to {error_log_dir}")
 
-    def set_last_year(self):
+    def _set_last_year(self):
         """Set the last year that was saved (always the year before the current year in save_dir, to account for some possible delay in saving)"""
         save_dir = Path(self.save_dir)
         if not save_dir.exists():

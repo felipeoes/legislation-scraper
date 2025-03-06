@@ -1,25 +1,52 @@
+import os
+from typing import List, Dict
+from src.scraper.base.scraper import BaseScaper
 from src.scraper.federal_legislation.scrape import CamaraDepScraper
-from src.scraper.state_legislation.sao_paulo import SaoPauloAlespScraper
-from src.scraper.state_legislation.rio_de_janeiro import RJAlerjScraper
+from src.scraper.conama.scrape import ConamaScraper
+from src.scraper.state_legislation import SaoPauloAlespScraper, RJAlerjScraper
+from dotenv import load_dotenv
+
+load_dotenv()
+
+ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR = os.environ.get(
+    "ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR"
+)
 
 if __name__ == "__main__":
 
     try:
-        camara_scraper = CamaraDepScraper(verbose=False, year_start=1976, year_end=1976)
-        data = camara_scraper.scrape()
-        print(f"Scraped {len(data)} data for Camara dos Deputados")
 
-    # alesp_scraper = SaoPauloAlespScraper(year_start=1865) # only have data starting from 1865
-    # data = alesp_scraper.scrape()
-    # print(f"Scraped {len(data)} data for Alesp")
+        scrapers: List[Dict[str, BaseScaper]] = [
+            # {
+            #     "scraper": CamaraDepScraper(verbose=False, year_start=1808, year_end=2024),
+            #     "name": "Camara dos Deputados"
+            # },
+            # {
+            #     "scraper": SaoPauloAlespScraper(),
+            #     "name": "Alesp"
+            # },
+            # {
+            #     "scraper": RJAlerjScraper(year_start=1968),
+            #     "name": "Alerj"
+            # },
+            {
+                "scraper": ConamaScraper(
+                    year_start=1984,
+                    docs_save_dir=ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR,
+                ),
+                "name": "CONAMA",
+            }
+        ]
 
-    # alerj_scraper = RJAlerjScraper(year_start=1968)
-    # data = alerj_scraper.scrape()
-    # print(f"Scraped {len(data)} data for Alerj")
+        for scraper in scrapers:
+            data = scraper["scraper"].scrape()
+            print(f"Scraped {len(data)} data for {scraper['name']}")
+
     except KeyboardInterrupt:
-        # wait saver to finish saving
-        camara_scraper.saver.running = False
-        camara_scraper.saver.join()
+        for scraper in scrapers:
+            scraper["scraper"].saver.running = False
+            scraper["scraper"].saver.join()
+
         print("KeyboardInterrupt: Exiting...")
 
     print("Exiting...")
