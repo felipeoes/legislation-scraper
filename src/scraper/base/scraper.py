@@ -66,7 +66,7 @@ class BaseScaper:
         retries = 5
         for _ in range(retries):
             try:
-                response = requests.get(url, headers=self.headers)
+                response = requests.get(url, headers=self.headers, verify=False)
 
                 # check  "O servidor encontrou um erro interno, ou está sobrecarregado" error
                 if (
@@ -94,15 +94,18 @@ class BaseScaper:
 
         return BeautifulSoup(response.text, "html.parser")
 
-    def _get_markdown(self, url: str) -> str:
+    def _get_markdown(self, url: str = None, response: requests.Response = None) -> str:
         """Get markdown response from given url"""
         try:
-            response = self._make_request(url)
-            md_content = self.md.convert(response).text_content
+            if response is not None:
+                md_content = self.md.convert(response).text_content
+            else:
+                response = self._make_request(url)
+                md_content = self.md.convert(response).text_content
         except Exception as e:
             print(f"Error getting markdown from url: {url} | Error: {e}")
             md_content = None
-            
+
         return md_content
 
     def _format_search_url(self, *args, **kwargs):
@@ -119,6 +122,7 @@ class BaseScaper:
 
     def scrape(self) -> list:
         """Scrape data from all years"""
+
         # start saver thread
         self.saver.start()
 
@@ -130,7 +134,6 @@ class BaseScaper:
             resume_from = int(self.saver.last_year)
         else:
             print(f"Starting from {resume_from}")
-            
 
         # # scrape data from all years
         for year in tqdm(

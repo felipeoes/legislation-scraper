@@ -3,7 +3,11 @@ from typing import List, Dict
 from src.scraper.base.scraper import BaseScaper
 from src.scraper.federal_legislation.scrape import CamaraDepScraper
 from src.scraper.conama.scrape import ConamaScraper
-from src.scraper.state_legislation import SaoPauloAlespScraper, RJAlerjScraper
+from src.scraper.state_legislation import (
+    SaoPauloAlespScraper,
+    RJAlerjScraper,
+    AcreLegisScraper,
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,20 +26,24 @@ if __name__ == "__main__":
             #     "name": "Camara dos Deputados"
             # },
             # {
+            #     "scraper": ConamaScraper(
+            #         year_start=1984,
+            #         docs_save_dir=ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR,
+            #     ),
+            #     "name": "CONAMA",
+            # },
+            {
+                "scraper": AcreLegisScraper(verbose=True, max_workers=32),
+                "name": "ACLegis",
+            },
+            # {
             #     "scraper": SaoPauloAlespScraper(),
-            #     "name": "Alesp"
+            #     "name": "SPAlesp"
             # },
             # {
             #     "scraper": RJAlerjScraper(year_start=1968),
-            #     "name": "Alerj"
+            #     "name": "RJAlerj"
             # },
-            {
-                "scraper": ConamaScraper(
-                    year_start=1984,
-                    docs_save_dir=ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR,
-                ),
-                "name": "CONAMA",
-            }
         ]
 
         for scraper in scrapers:

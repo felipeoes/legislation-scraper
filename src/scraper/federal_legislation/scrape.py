@@ -420,7 +420,7 @@ Por favor, aguarde."""
                     ]
                     for future in tqdm(
                         as_completed(futures),
-                        desc="CamaraDEP |Pages",
+                        desc="CamaraDEP | Pages",
                         disable=not self.verbose,
                         total=len(futures),
                     ):
