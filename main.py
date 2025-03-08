@@ -1,12 +1,14 @@
 import os
+from openai import OpenAI
 from typing import List, Dict
 from src.scraper.base.scraper import BaseScaper
 from src.scraper.federal_legislation.scrape import CamaraDepScraper
 from src.scraper.conama.scrape import ConamaScraper
 from src.scraper.state_legislation import (
+    AcreLegisScraper,
+    AlagoasSefazScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
-    AcreLegisScraper,
 )
 from dotenv import load_dotenv
 
@@ -20,6 +22,12 @@ if __name__ == "__main__":
 
     try:
 
+        client = OpenAI(
+            api_key=os.environ.get("LLM_API_KEY"),
+            base_url=os.environ.get("PROVIDER_BASE_URL"),
+        )
+        model = os.environ.get("LLM_MODEL")
+
         scrapers: List[Dict[str, BaseScaper]] = [
             # {
             #     "scraper": CamaraDepScraper(verbose=False, year_start=1808, year_end=2024),
@@ -32,10 +40,20 @@ if __name__ == "__main__":
             #     ),
             #     "name": "CONAMA",
             # },
+            # {
+            #     "scraper": AcreLegisScraper(verbose=True, max_workers=32),
+            #     "name": "ACLegis",
+            # },
             {
-                "scraper": AcreLegisScraper(verbose=True, max_workers=32),
-                "name": "ACLegis",
-            },
+                "scraper": AlagoasSefazScraper(
+                    year_start=1899,
+                    llm_client=client,  # using LLM API for OCR (some documents are actually images embedded in pdf)
+                    llm_model=model,
+                    verbose=True,
+                    max_workers=48,
+                ),
+                "name": "ALSefaz",
+            }
             # {
             #     "scraper": SaoPauloAlespScraper(),
             #     "name": "SPAlesp"

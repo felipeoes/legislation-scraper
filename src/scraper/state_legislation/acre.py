@@ -88,7 +88,11 @@ class AcreLegisScraper(BaseScaper):
             return None
 
         soup = BeautifulSoup(response.text, "html.parser")
-        html_string = soup.find("div", id="body-law").prettify()
+        html_string = soup.find("div", id="body-law")
+        if not html_string:
+            soup.find("div", id="exportacao")
+        
+        html_string = html_string.prettify()
 
         # get text markdown
         text_markdown = self._get_markdown(response=response)
