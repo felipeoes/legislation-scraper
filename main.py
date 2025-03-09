@@ -10,6 +10,7 @@ from src.scraper.state_legislation import (
     AlagoasSefazScraper,
     LegislaAMScraper,
     AmapaAlapScraper,
+    BahiaLegislaScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -75,13 +76,21 @@ if __name__ == "__main__":
             #     ),
             #     "name": "LegislaAM",
             # },
+            # {
+            #     "scraper": AmapaAlapScraper(
+            #         year_start=1991,  # 1991 is the earliest year available
+            #         verbose=True,
+            #         max_workers=32,
+            #     ),
+            #     "name": "APAlap",
+            # },
             {
-                "scraper": AmapaAlapScraper(
-                    year_start=1991,  # 1991 is the earliest year available
+                "scraper": BahiaLegislaScraper(
+                    year_start=1827,
                     verbose=True,
-                    max_workers=32,
+                    max_workers=48,
                 ),
-                "name": "APAlap",
+                "name": "BALegisla",
             },
             # {
             #     "scraper": SaoPauloAlespScraper(),
