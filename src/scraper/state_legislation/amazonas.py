@@ -36,6 +36,7 @@ class LegislaAMScraper(BaseScaper):
 
     Example search request: https://legisla.imprensaoficial.am.gov.br/diario_am/41535/2022?page=1
     """
+    # TODO: Change scraper to be based on https://sapl.al.am.leg.br/norma/pesquisar
 
     def __init__(
         self,
