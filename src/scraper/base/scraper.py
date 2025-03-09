@@ -6,12 +6,14 @@ from io import BytesIO
 from os import environ
 from datetime import datetime
 from bs4 import BeautifulSoup
-from markitdown import MarkItDown
+from selenium.webdriver import Chrome
+from selenium.webdriver.chrome.options import Options
+from markitdown import MarkItDown, UnsupportedFormatException, FileConversionException
 from tqdm import tqdm
 from multiprocessing import Queue
-from src.database.saver import OneDriveSaver
 from pathlib import Path
 from dotenv import load_dotenv
+from src.database.saver import OneDriveSaver
 
 load_dotenv()
 
@@ -37,6 +39,7 @@ class BaseScaper:
         llm_client: OpenAI = None,
         llm_model: str = None,
         llm_prompt: str = "Extraia todo  o conteúdo da imagem. Retorne somente o conteúdo extraído",
+        use_selenium: bool = False,
         max_workers: int = 16,
         verbose: bool = False,
     ):
@@ -49,6 +52,7 @@ class BaseScaper:
         self.llm_client = llm_client
         self.llm_model = llm_model
         self.llm_prompt = llm_prompt
+        self.use_selenium = use_selenium
         self.verbose = verbose
         self.max_workers = max_workers
         self.years = list(range(self.year_start, self.year_end + 1))
@@ -63,7 +67,20 @@ class BaseScaper:
         self.count = 0  # keep track of number of results
         self.md = MarkItDown(llm_client=llm_client, llm_model=llm_model)
         self.soup = None
+        self.driver: Chrome = None
         self.saver: OneDriveSaver = None
+        self.initialize_selenium()
+
+    def initialize_selenium(self):
+        """Initialize selenium driver"""
+        if self.use_selenium:
+            options = Options()
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--disable-extensions")
+            options.add_argument("--enable-javascript")
+            self.driver = Chrome(options=options)
 
     def _initialize_saver(self):
         """Initialize saver class. The child class should call this method in its __init__ method, after setting the docs_save_dir attribute."""
@@ -108,6 +125,11 @@ class BaseScaper:
 
         return BeautifulSoup(response.text, "html.parser")
 
+    def _selenium_get_soup(self, url: str) -> BeautifulSoup:
+        """Get BeautifulSoup object from given url using selenium"""
+        self.driver.get(url)
+        return BeautifulSoup(self.driver.page_source, "html.parser")
+
     def _get_markdown(
         self,
         url: str = None,
@@ -132,6 +154,14 @@ class BaseScaper:
                     else None
                 ),
             ).text_content
+
+        except FileConversionException as e:
+            print(f"Error converting to markdown: {e}")
+            md_content = None
+
+        except UnsupportedFormatException as e:
+            print(f"Error converting to markdown: {e}")
+            md_content = None
 
         except Exception as e:
             print(f"Error getting markdown from url: {url} | Error: {e}")

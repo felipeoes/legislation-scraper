@@ -1,6 +1,7 @@
 import warnings
 import re
 
+from datetime import datetime
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -9,10 +10,10 @@ from src.scraper.base.scraper import BaseScaper
 warnings.filterwarnings("ignore")
 
 TYPES = {
-    "Lei Ordinária": 1,
-    "Lei Complementar": 2,
+    "Lei Ordinária": "lei_ordinarias",
+    "Lei Complementar": "lei_complementares",
     "Constituição Estadual": "detalhar_constituicao",  # texto completo, modificar a lógica no scraper
-    "Decreto": 3,
+    "Decreto": "lei_decretos",
 }
 
 VALID_SITUATIONS = [
@@ -49,13 +50,17 @@ class AcreLegisScraper(BaseScaper):
         """Format url for search request"""
         return f"{self.base_url}/{norm_type_id}"
 
-    def _get_docs_html_links(self, soup: BeautifulSoup) -> list:
+    def _get_docs_links(self, soup: BeautifulSoup, norm_type_id: str) -> list:
         """Get documents html links from soup object.
         Returns a list of dicts with keys 'title', 'year', 'summary' and 'html_link'
         """
 
-        # get all tr's from table
-        trs = soup.find_all("tr", class_="visaoQuadrosTr")
+        # get all tr's from table that is within the div with id == norm_type_id
+        trs = (
+            soup.find("div", id=norm_type_id)
+            .find("table")
+            .find_all("tr", {"class": "visaoQuadrosTr"})
+        )
 
         # get all html links
         html_links = []
@@ -91,8 +96,8 @@ class AcreLegisScraper(BaseScaper):
         html_string = soup.find("div", id="body-law")
         if not html_string:
             soup.find("div", id="exportacao")
-        
-        html_string = html_string.prettify()
+
+        html_string = html_string.prettify() if html_string else ""
 
         # get text markdown
         text_markdown = self._get_markdown(response=response)
@@ -113,6 +118,30 @@ class AcreLegisScraper(BaseScaper):
             "document_url": doc_html_link,
         }
 
+    def _get_state_constitution(self, norm_type_id: str) -> dict:
+        """Get state constitution data"""
+        document_url = f"{self.base_url.replace('/principal', '')}/{norm_type_id}"
+        response = self._make_request(document_url)
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        html_string = soup.find("div", id="exportacao").prettify()
+
+        # get text markdown
+        text_markdown = self._get_markdown(response=response)
+
+        text_markdown = text_markdown.replace(self.remove_markdown_header, "").replace(
+            self.remove_markdown_footer, ""
+        )
+
+        return {
+            "title": "Constituição Estadual",
+            "year": datetime.now().year,
+            "summary": "Constituição Estadual do Estado do Acre",
+            "html_string": html_string,
+            "text_markdown": text_markdown,
+            "document_url": document_url,
+        }
+
     def scrape(self):
         """Scrape norms"""
 
@@ -125,17 +154,27 @@ class AcreLegisScraper(BaseScaper):
             total=len(self.situations),
             disable=not self.verbose,
         ):
+
+            # all the norms and types are in the same page, so we just need to make one request to get html links
+
+            url = self._format_search_url(1)
+            soup = self._get_soup(url)
+            if soup is None:
+                continue
+
             for norm_type, norm_type_id in self.types.items():
-                url = self._format_search_url(norm_type_id)
-                soup = self._get_soup(url)
-                if soup is None:
+
+                # if it's state constitution, we need to change logic. All the text is within div class="exportacao"
+                if norm_type == "Constituição Estadual":
+                    doc_info = self._get_state_constitution(norm_type_id)
+                    doc_info["situation"] = situation
+                    doc_info["type"] = norm_type
+                    
+                    self.queue.put(doc_info)
+                    self.results.append(doc_info)
                     continue
 
-                html_links = self._get_docs_html_links(soup)
-
-                # delete soup object to free memory, since all data is extracted at once
-                del soup
-
+                html_links = self._get_docs_links(soup, norm_type_id)
                 results = []
 
                 # Get data from all  documents text links using ThreadPoolExecutor
@@ -146,7 +185,7 @@ class AcreLegisScraper(BaseScaper):
 
                     for future in tqdm(
                         as_completed(futures),
-                        desc=f"ACRE | {norm_type}",
+                        desc=f"ACRE | Type: {norm_type}",
                         total=len(html_links),
                         disable=not self.verbose,
                     ):

@@ -92,9 +92,6 @@ class AlagoasSefazScraper(BaseScaper):
 
         except Exception as e:
             print(f"Error getting document links from url: {url} | Error: {e}")
-            # norms = None
-
-        # return norms
 
     def pdf_to_single_image(
         self, doc: fitz.Document, output_path: str = "combined_image.jpg"
@@ -140,7 +137,7 @@ class AlagoasSefazScraper(BaseScaper):
         y_offset = 0
 
         for img in image_list:
-            # Resize each image to the maximum width (optional, for consistent width)
+            # Resize each image to the maximum width
             if img.width < max_width:
                 img = img.resize(
                     (max_width, int(img.height * (max_width / img.width))),
@@ -168,7 +165,7 @@ class AlagoasSefazScraper(BaseScaper):
 
             pdf_bytes = base64.b64decode(base64_data)
             pdf_file_stream = BytesIO(pdf_bytes)
-            text_markdown = self._get_markdown(stream=pdf_file_stream)
+            text_markdown_raw = self._get_markdown(stream=pdf_file_stream)
 
             # get images from pdf
             pdf = fitz.open("pdf", pdf_bytes)
@@ -179,8 +176,9 @@ class AlagoasSefazScraper(BaseScaper):
                 combined_image.save(buffer, format="JPEG")
                 combined_image = BytesIO(buffer.getvalue())
                 text_markdown_img = self._get_markdown(stream=combined_image)
-                text_markdown += text_markdown_img
+                text_markdown = text_markdown_raw + text_markdown_img
             else:
+                text_markdown = text_markdown_raw
                 # debug, remove later
                 print("No images found in pdf")
 
@@ -211,7 +209,7 @@ class AlagoasSefazScraper(BaseScaper):
         ):
             for norm_type, norm_type_id in tqdm(
                 self.types.items(),
-                desc="SEFAZ - ALAGOAS | Types",
+                desc=f"SEFAZ - ALAGOAS Year: {year} | Types",
                 total=len(self.types),
                 disable=not self.verbose,
             ):
@@ -273,20 +271,25 @@ class AlagoasSefazScraper(BaseScaper):
                         total=len(norms),
                         disable=not self.verbose,
                     ):
-                        result = future.result()
-                        if result is None:
-                            continue
 
-                        # save to one drive
-                        queue_item = {
-                            "year": year,
-                            "type": norm_type,
-                            "situation": situation,
-                            **result,
-                        }
+                        try:
+                            result = future.result()
+                            if result is None:
+                                continue
 
-                        self.queue.put(queue_item)
-                        results.append(queue_item)
+                            # save to one drive
+                            queue_item = {
+                                "year": year,
+                                "type": norm_type,
+                                "situation": situation,
+                                **result,
+                            }
+
+                            self.queue.put(queue_item)
+                            results.append(queue_item)
+
+                        except Exception as e:
+                            print(f"Error getting document data | Error: {e}")
 
                     self.results.extend(results)
                     self.count += len(results)

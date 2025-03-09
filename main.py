@@ -4,9 +4,11 @@ from typing import List, Dict
 from src.scraper.base.scraper import BaseScaper
 from src.scraper.federal_legislation.scrape import CamaraDepScraper
 from src.scraper.conama.scrape import ConamaScraper
+from src.scraper.icmbio.scrape import ICMBioScraper
 from src.scraper.state_legislation import (
     AcreLegisScraper,
     AlagoasSefazScraper,
+    LegislaAMScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -21,7 +23,6 @@ ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR = os.environ.get(
 if __name__ == "__main__":
 
     try:
-
         client = OpenAI(
             api_key=os.environ.get("LLM_API_KEY"),
             base_url=os.environ.get("PROVIDER_BASE_URL"),
@@ -41,18 +42,37 @@ if __name__ == "__main__":
             #     "name": "CONAMA",
             # },
             # {
-            #     "scraper": AcreLegisScraper(verbose=True, max_workers=32),
+            #     "scraper": ICMBioScraper(
+            #         year_start=1800,
+            #         use_selenium=True,  # using selenium because the website is dynamic and needs javascript to load content
+            #         docs_save_dir=ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR,
+            #         verbose=True,
+            #     ),
+            #     "name": "ICMBio",
+            # },
+            # {
+            #     "scraper": AcreLegisScraper(
+            #         year_start=1800, verbose=True, max_workers=32
+            #     ),
             #     "name": "ACLegis",
             # },
+            # {
+            #     "scraper": AlagoasSefazScraper(
+            #         year_start=2010,
+            #         llm_client=client,  # using LLM API for OCR (some documents are actually images embedded in pdf)
+            #         llm_model=model,
+            #         verbose=True,
+            #         max_workers=48,
+            #     ),
+            #     "name": "ALSefaz",
+            # },
             {
-                "scraper": AlagoasSefazScraper(
-                    year_start=1899,
-                    llm_client=client,  # using LLM API for OCR (some documents are actually images embedded in pdf)
-                    llm_model=model,
+                "scraper": LegislaAMScraper(
+                    year_start=1953, # 1953 is the earliest year available
                     verbose=True,
-                    max_workers=48,
+                    max_workers=32,
                 ),
-                "name": "ALSefaz",
+                "name": "LegislaAM",
             }
             # {
             #     "scraper": SaoPauloAlespScraper(),
