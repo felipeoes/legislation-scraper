@@ -71,155 +71,7 @@ class BahiaLegislaScraper(BaseScaper):
         Returns a list of dicts with keys 'title', 'html_link'
         """
         soup = self._get_soup(url)
-
-        #     <tbody>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23500-de-17-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23500-de-17-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.500 DE 17 DE FEVEREIRO DE 2025</a></b>
-        #                           Dispõe sobre a organização e funcionamento das Câmaras de Prevenção e Resolução Administrativa de Conflitos da Administração Pública Estadual - CPRAC, no âmbito da Procuradoria Geral do Estado - PGE, na forma que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23459-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23459-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.459 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23458-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23458-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.458 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23457-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23457-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.457 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, as áreas de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23456-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23456-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.456 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de constituição de servidão administrativa, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23455-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23455-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.455 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, as áreas de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23454-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23454-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.454 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, as áreas de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23453-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23453-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.453 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Homologa o Decreto Municipal de "Situação de Emergência” que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23452-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23452-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.452 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Homologa o Decreto Municipal de "Situação de Emergência” que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23451-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23451-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.451 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Homologa o Decreto Municipal de "Situação de Emergência” que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23450-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23450-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.450 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Homologa o Decreto Municipal de "Situação de Emergência” que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23449-de-13-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23449-de-13-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.449 DE 13 DE FEVEREIRO DE 2025</a></b>
-        #                           Altera o quadro de cargos em comissão da Polícia Civil do Estado da Bahia - PCBA, na forma que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23448-de-12-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23448-de-12-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.448 DE 12 DE FEVEREIRO DE 2025</a></b>
-        #                           Prorroga o prazo da Declaração do Estado de Emergência Zoossanitária em todo território baiano, para fins de prevenção da Influenza Aviária H5N1 de Alta Patogenicidade - IAAP, conforme disposto no Decreto nº 22.174, de 21 de…
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23447-de-11-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23447-de-11-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.447 DE 11 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23446-de-11-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23446-de-11-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.446 DE 11 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de constituição de servidão administrativa, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23445-de-11-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23445-de-11-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.445 DE 11 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23444-de-11-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23444-de-11-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.444 DE 11 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23443-de-11-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23443-de-11-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.443 DE 11 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23442-de-11-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23442-de-11-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.442 DE 11 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #       <tr>
-        #                         <td headers="view-title-table-column"><span>
-        #                           <a href="/documentos/decreto-no-23441-de-11-de-fevereiro-de-2025" target="_blank"><b class="clearfix"></b></a><b class="clearfix"><a href="/documentos/decreto-no-23441-de-11-de-fevereiro-de-2025" hreflang="pt-br" target="_blank">DECRETO Nº 23.441 DE 11 DE FEVEREIRO DE 2025</a></b>
-        #                           Declara de utilidade pública, para fins de desapropriação, a área de terra que indica.
-        #                         </span>          </td>
-        #                                                                                     <td headers="view-field-categoria-doc-table-column" class="views-field views-field-field-categoria-doc views-align-left">Decretos Numerados          </td>
-        #           </tr>
-        #   </tbody>
-
         docs = []
-
-        # <tr class="odd">
-        #                     <td colspan="2" class="views-empty"><center>Nenhum resultado encontrado</center>          </td>
-        #       </tr>
 
         # check if the page is empty ("Nenhum resultado encontrado")
         if soup.find("td", class_="views-empty"):
@@ -254,29 +106,23 @@ class BahiaLegislaScraper(BaseScaper):
         soup = BeautifulSoup(response.content, "html.parser")
 
         # get norm_number, date, publication_date and summary
-        norm_number = soup.find("div", class_="field--name-field-numero-doc").find(
-            "div", class_="field--item"
-        )
+        norm_number = soup.find("div", class_="field--name-field-numero-doc")
         if norm_number:
-            norm_number = norm_number.text.strip()
+            norm_number = norm_number.find("div", class_="field--item")
 
-        date = soup.find("div", class_="field--name-field-data-doc").find(
-            "div", class_="field--item"
-        )
+        date = soup.find("div", class_="field--name-field-data-doc")
         if date:
-            date = date.text.strip()
+            date = date.find("div", class_="field--item")
 
         publication_date = soup.find(
             "div", class_="field--name-field-data-de-publicacao-no-doe"
-        ).find("div", class_="field--item")
-        if publication_date:
-            publication_date = publication_date.text.strip()
-
-        summary = soup.find("div", class_="field--name-field-ementa").find(
-            "div", class_="field--item"
         )
+        if publication_date:
+            publication_date = publication_date.find("div", class_="field--item")
+
+        summary = soup.find("div", class_="field--name-field-ementa")
         if summary:
-            summary = summary.text.strip()
+            summary = summary.find("div", class_="field--item")
 
         # get html string and text markdown
         # class="visivel-separador field field--name-body field--type-text-with-summary field--label-hidden field--item"
@@ -289,10 +135,10 @@ class BahiaLegislaScraper(BaseScaper):
 
         text_markdown = self._get_markdown(stream=buffer)
 
-        doc_info["norm_number"] = norm_number
-        doc_info["date"] = date
-        doc_info["publication_date"] = publication_date
-        doc_info["summary"] = summary
+        doc_info["norm_number"] = norm_number.text.strip() if norm_number else ""
+        doc_info["date"] = date.text.strip() if date else ""
+        doc_info["publication_date"] = publication_date.text.strip() if publication_date else ""
+        doc_info["summary"] = summary.text.strip() if summary else ""
         doc_info["html_string"] = html_string
         doc_info["text_markdown"] = text_markdown
         doc_info["document_url"] = url
