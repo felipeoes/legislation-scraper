@@ -95,7 +95,7 @@ class BaseScaper:
             try:
 
                 if method == "POST":
-                    response = requests.post(url, headers=self.headers, json=json)
+                    response = requests.post(url, headers=self.headers, json=json, verify=False)
                 else:
                     response = requests.get(url, headers=self.headers, verify=False)
 

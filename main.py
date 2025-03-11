@@ -12,6 +12,7 @@ from src.scraper.state_legislation import (
     AmapaAlapScraper,
     BahiaLegislaScraper,
     CearaAleceScraper,
+    DFSinjScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -128,6 +129,14 @@ if __name__ == "__main__":
                 "run": False,
             },
             {
+                "scraper": DFSinjScraper,
+                "params": {
+                    "verbose": True,
+                },
+                "name": "DFSinj",
+                "run": True,
+            },
+            {
                 "scraper": SaoPauloAlespScraper,
                 "params": {},
                 "name": "SPAlesp",
@@ -152,8 +161,9 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         for scraper in scrapers:
-            scraper["scraper"].saver.running = False
-            scraper["scraper"].saver.join()
+            if scraper["run"]:
+                scraper["scraper"].saver.running = False
+                scraper["scraper"].saver.join()
 
         print("KeyboardInterrupt: Exiting...")
 

@@ -83,13 +83,13 @@ class BahiaLegislaScraper(BaseScaper):
             tds = item.find_all("td")
             if len(tds) != 2:
                 continue
-
-            title = tds[0].text.strip()
+            
+            title = tds[0].find("b").text
             html_link = tds[0].find("a")["href"]
 
             docs.append(
                 {
-                    "title": title,
+                    "title": title.strip(),
                     "html_link": html_link,
                 }
             )
@@ -127,6 +127,9 @@ class BahiaLegislaScraper(BaseScaper):
         # get html string and text markdown
         # class="visivel-separador field field--name-body field--type-text-with-summary field--label-hidden field--item"
         norm_text_tag = soup.find("div", class_="field--name-body")
+        if not norm_text_tag:
+            return None # invalid norm
+        
         html_string = f"<html>{norm_text_tag.prettify()}</html>"
 
         buffer = BytesIO()
