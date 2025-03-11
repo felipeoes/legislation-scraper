@@ -166,9 +166,9 @@ class RJAlerjScraper(BaseScaper):
             # get all tr's with 6 td's
             documents_html_links = self._get_docs_html_links(norm_type, soup)
 
+            results = []
             # Get data from all  documents text links using ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                results = []
                 futures = [
                     executor.submit(self._get_doc_data, doc)
                     for doc in documents_html_links

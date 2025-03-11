@@ -1,13 +1,8 @@
 import requests
-import re
 
-from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-from dotenv import load_dotenv
 from src.scraper.base.scraper import BaseScaper
-
-load_dotenv()
 
 TYPES = {
     "Resolução": 1,

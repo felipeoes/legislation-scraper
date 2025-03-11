@@ -56,22 +56,18 @@ class OneDriveSaver(Thread):
         self.last_year = max(years) - 1 if years else None
 
     def run(self):
-        retries = 120  # 10 minutes
-        while self.running and retries > 0:
+        while self.running:
             if self.queue.empty() and self.error_queue.empty():
-                retries -= 1
-                time.sleep(5)
+                time.sleep(3)
                 continue
 
             if not self.queue.empty():
                 data = self.queue.get()
                 self.save(data)
-                retries = 120
 
             if not self.error_queue.empty():
                 data = self.error_queue.get()
                 self.save_error(data)
-                retries = 120
 
         # get all remaining data in queue
         print(f"Saving remaining {self.queue.qsize()} data in queue")
@@ -82,7 +78,7 @@ class OneDriveSaver(Thread):
             progress.update(1)
 
         print(
-            f"{self.__class__.__name__} stopped since {retries} retries reached and running is {self.running}"
+            f"{self.__class__.__name__} stopped since queue is empty and running is {self.running}"
         )
 
     def truncate_file_path(self, file_path: Path, max_length: int) -> Path:
