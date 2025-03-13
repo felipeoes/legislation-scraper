@@ -1,60 +1,57 @@
-import requests
-
 from io import BytesIO
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
 
-TYPES = [
-    "Ato da Mesa Diretora",
-    "Ato Declaratório",
-    "Ato Declaratório Interpretativo",
-    "Ato do Presidente",
-    "Ato Regimental",
-    "Decisão",
-    "Decreto",
-    "Decreto Executivo",
-    "Decreto Legislativo",
-    "Deliberação",
-    "Despacho",
-    "Determinação",
-    "Emenda Constitucional",
-    "Emenda Regimental",
-    "Estatuto",
-    "Instrução",
-    "Instrução de Serviço",
-    "Instrução Normativa",
-    "Lei",
-    "Lei Complementar",
-    "Norma Técnica",
-    "Portaria",
-    "Ordem de Serviço",
-    "Ordem de Serviço Conjunta",
-    "Parecer Normativo",
-    "Parecer Referencial",
-    "Plano",
-    "Portaria",
-    "Portaria Conjunta",
-    "Portaria Normativa",
-    "Recomendação",
-    "Regimento",
-    "Regimento Interno",
-    "Regulamento",
-    "Resolução",
-    "Resolução Administrativa",
-    "Resolução Normativa",
-    "Resolução Ordinária",
-    "Súmula",
-    "Súmula Administrativa",
-]
+TYPES = {
+    "Ato da Mesa Diretora": 17000000,
+    "Ato Declaratório": 18000000,
+    "Ato Declaratório Interpretativo": "7c5da8af85dd43b8973acaf39043a3d2",
+    "Ato do Presidente": "18e34c5d799c445ab47df54cf6f1d2b9",
+    "Ato Regimental": 20000000,
+    "Decisão": 23000000,
+    "Decreto": 27000000,
+    "Decreto Executivo": 28000000,
+    "Decreto Legislativo": 29000000,
+    "Deliberação": "c870f54826864e6889ec08c7f3d9d8c2",
+    "Despacho": 31000000,
+    "Determinação": "b67f52a2c5a5471299f5ea2cc6c2aad5",
+    "Emenda Regimental": 38000000,
+    "Estatuto": 39000000,
+    "Instrução": 41000000,
+    "Instrução de Serviço": 43000000,
+    "Instrução Normativa": 45000000,
+    "Lei": 46000000,
+    "Lei Complementar": 47000000,
+    "Norma Técnica": 52000000,
+    "Portaria": 59000000,
+    "Ordem de Serviço": 53000000,
+    "Ordem de Serviço Conjunta": 54000000,
+    "Parecer Normativo": 57000000,
+    "Parecer Referencial": "877d20147e02451e929fcfa80ae76de3",
+    "Plano": 58000000,
+    "Portaria": 59000000,
+    "Portaria Conjunta": 60000000,
+    "Portaria Normativa": 61000000,
+    "Recomendação": 65000000,
+    "Regimento": 66000000,
+    "Regimento Interno": 67000000,
+    "Regulamento": 68000000,
+    "Resolução": 71000000,
+    "Resolução Administrativa": 72000000,
+    "Resolução Normativa": 75000000,
+    "Resolução Ordinária": "037f6f0fc7a04d69834cf60007bba07d",
+    "Súmula": 76000000,
+    "Súmula Administrativa": "d74996b4f496432fa09fea831f4f72be",
+}
 
 VALID_SITUATIONS = {
+    "Sem Revogação Expressa": "semrevogacaoexpressa",
     "Ajuizado": "ajuizado",
     "Alterado": "alterado",
     "Julgado Procedente": "julgadoprocedente",
     "Não conhecida": "naoconhecida",
-    "Sem revogação expressa": "semrevogacaoexpressa",
 }
 
 INVALID_SITUATIONS = {
@@ -84,68 +81,61 @@ class DFSinjScraper(BaseScaper):
         "iColumns": 9,
         "sColumns": ",,,,,,,,",
         "iDisplayStart": 0,
-        "iDisplayLength": 10,
+        "iDisplayLength": 100,
         "mDataProp_0": "_score",
         "sSearch_0": "",
-        "bRegex_0": "false",
-        "bSearchable_0": "true",
-        "bSortable_0": "false",
+        "bRegex_0": False,
+        "bSearchable_0": True,
+        "bSortable_0": False,
         "mDataProp_1": "_score",
         "sSearch_1": "",
-        "bRegex_1": "false",
-        "bSearchable_1": "true",
-        "bSortable_1": "true",
+        "bRegex_1": False,
+        "bSearchable_1": True,
+        "bSortable_1": True,
         "mDataProp_2": "nm_tipo_norma",
         "sSearch_2": "",
-        "bRegex_2": "false",
-        "bSearchable_2": "true",
-        "bSortable_2": "true",
+        "bRegex_2": False,
+        "bSearchable_2": True,
+        "bSortable_2": True,
         "mDataProp_3": "dt_assinatura",
         "sSearch_3": "",
-        "bRegex_3": "false",
-        "bSearchable_3": "true",
-        "bSortable_3": "true",
+        "bRegex_3": False,
+        "bSearchable_3": True,
+        "bSortable_3": True,
         "mDataProp_4": "origens",
         "sSearch_4": "",
-        "bRegex_4": "false",
-        "bSearchable_4": "true",
-        "bSortable_4": "false",
+        "bRegex_4": False,
+        "bSearchable_4": True,
+        "bSortable_4": False,
         "mDataProp_5": "ds_ementa",
         "sSearch_5": "",
-        "bRegex_5": "false",
-        "bSearchable_5": "true",
-        "bSortable_5": "false",
+        "bRegex_5": False,
+        "bSearchable_5": True,
+        "bSortable_5": False,
         "mDataProp_6": "nm_situacao",
         "sSearch_6": "",
-        "bRegex_6": "false",
-        "bSearchable_6": "true",
-        "bSortable_6": "true",
+        "bRegex_6": False,
+        "bSearchable_6": True,
+        "bSortable_6": True,
         "mDataProp_7": 7,
         "sSearch_7": "",
-        "bRegex_7": "false",
-        "bSearchable_7": "true",
-        "bSortable_7": "false",
+        "bRegex_7": False,
+        "bSearchable_7": True,
+        "bSortable_7": False,
         "mDataProp_8": 8,
         "sSearch_8": "",
-        "bRegex_8": "false",
-        "bSearchable_8": "true",
-        "bSortable_8": "false",
+        "bRegex_8": False,
+        "bSearchable_8": True,
+        "bSortable_8": False,
         "sSearch": "",
-        "bRegex": "false",
+        "bRegex": False,
         "iSortCol_0": 1,
         "sSortDir_0": "desc",
         "iSortingCols": 1,
-        "tipo_pesquisa": "norma",
-        "all": "",
-        "ch_tipo_norma": 46000000,
-        "nm_tipo_norma": "Lei",
-        "nr_norma": "",
-        "ano_assinatura": 1800,
-        "ch_orgao": "",
-        "ch_hierarquia": "",
-        "sg_hierarquia_nm_vigencia": "",
-        "origem_por": "toda_a_hierarquia_em_qualquer_epoca1",
-        "argumento": "autocomplete#ch_situacao#Situação#igual#igual a#sustado#Sustado(a)#E"
+        "tipo_pesquisa": "avancada",
+        "argumento": "autocomplete#ch_situacao#Situação#igual#igual a#semrevogacaoexpressa#Sem Revogação Expressa#E",
+        "argumento": "number#ano_assinatura#Ano de Assinatura#igual#igual a#1960#1960#E",
+        "ch_tipo_norma": 27000000,
     }
     """
 
@@ -161,80 +151,83 @@ class DFSinjScraper(BaseScaper):
             "iColumns": 9,
             "sColumns": ",,,,,,,,",
             "iDisplayStart": 0,
-            "iDisplayLength": 10,
+            "iDisplayLength": 100,
             "mDataProp_0": "_score",
             "sSearch_0": "",
-            "bRegex_0": "false",
-            "bSearchable_0": "true",
-            "bSortable_0": "false",
+            "bRegex_0": False,
+            "bSearchable_0": True,
+            "bSortable_0": False,
             "mDataProp_1": "_score",
             "sSearch_1": "",
-            "bRegex_1": "false",
-            "bSearchable_1": "true",
-            "bSortable_1": "true",
+            "bRegex_1": False,
+            "bSearchable_1": True,
+            "bSortable_1": True,
             "mDataProp_2": "nm_tipo_norma",
             "sSearch_2": "",
-            "bRegex_2": "false",
-            "bSearchable_2": "true",
-            "bSortable_2": "true",
+            "bRegex_2": False,
+            "bSearchable_2": True,
+            "bSortable_2": True,
             "mDataProp_3": "dt_assinatura",
             "sSearch_3": "",
-            "bRegex_3": "false",
-            "bSearchable_3": "true",
-            "bSortable_3": "true",
+            "bRegex_3": False,
+            "bSearchable_3": True,
+            "bSortable_3": True,
             "mDataProp_4": "origens",
             "sSearch_4": "",
-            "bRegex_4": "false",
-            "bSearchable_4": "true",
-            "bSortable_4": "false",
+            "bRegex_4": False,
+            "bSearchable_4": True,
+            "bSortable_4": False,
             "mDataProp_5": "ds_ementa",
             "sSearch_5": "",
-            "bRegex_5": "false",
-            "bSearchable_5": "true",
-            "bSortable_5": "false",
+            "bRegex_5": False,
+            "bSearchable_5": True,
+            "bSortable_5": False,
             "mDataProp_6": "nm_situacao",
             "sSearch_6": "",
-            "bRegex_6": "false",
-            "bSearchable_6": "true",
-            "bSortable_6": "true",
+            "bRegex_6": False,
+            "bSearchable_6": True,
+            "bSortable_6": True,
             "mDataProp_7": 7,
             "sSearch_7": "",
-            "bRegex_7": "false",
-            "bSearchable_7": "true",
-            "bSortable_7": "false",
+            "bRegex_7": False,
+            "bSearchable_7": True,
+            "bSortable_7": False,
             "mDataProp_8": 8,
             "sSearch_8": "",
-            "bRegex_8": "false",
-            "bSearchable_8": "true",
-            "bSortable_8": "false",
+            "bRegex_8": False,
+            "bSearchable_8": True,
+            "bSortable_8": False,
             "sSearch": "",
-            "bRegex": "false",
+            "bRegex": False,
             "iSortCol_0": 1,
             "sSortDir_0": "desc",
             "iSortingCols": 1,
-            "tipo_pesquisa": "norma",
-            "all": "",
-            "ch_tipo_norma": 46000000,
-            "nm_tipo_norma": "Lei",
-            "nr_norma": "",
-            "ano_assinatura": 1800,
-            "ch_orgao": "",
-            "ch_hierarquia": "",
-            "sg_hierarquia_nm_vigencia": "",
-            "origem_por": "toda_a_hierarquia_em_qualquer_epoca1",
-            "argumento": "autocomplete#ch_situacao#Situação#igual#igual a#sustado#Sustado(a)#E",
+            "tipo_pesquisa": "avancada",
+            "argumento": "autocomplete#ch_situacao#Situação#igual#igual a#semrevogacaoexpressa#Sem Revogação Expressa#E",
+            "argumento_situation": "number#ano_assinatura#Ano de Assinatura#igual#igual a#1960#1960#E",
+            "ch_tipo_norma": 27000000,
         }
+        self.total_pages_url = "https://www.sinj.df.gov.br/sinj/ashx/Consulta/TotalConsulta.ashx?bbusca=sinj_norma"
+        self.session_id_created = False
         self._initialize_saver()
 
     def _format_search_url(
-        self, situation: str, norm_type_id: str, year: int, page: int = 1
+        self,
+        situation: str,
+        situation_id: str,
+        norm_type_id: str,
+        year: int,
+        page: int = 1,
     ) -> str:
         """Format url for search request"""
-        self.params["nm_tipo_norma"] = norm_type_id
-        self.params["ano_assinatura"] = year
         self.params["argumento"] = (
-            f"autocomplete#ch_situacao#Situação#igual#igual a#{situation}#{situation}#E"
+            f"number#ano_assinatura#Ano de Assinatura#igual#igual a#{year}#{year}#E"
         )
+        self.params["argumento_situation"] = (
+            f"autocomplete#ch_situacao#Situação#igual#igual a#{situation_id}#{situation}#E"
+        )
+        self.params["ch_tipo_norma"] = norm_type_id
+
         self.params["iDisplayLength"] = 100
         self.params["iDisplayStart"] = (page - 1) * self.params["iDisplayLength"]
 
@@ -242,7 +235,24 @@ class DFSinjScraper(BaseScaper):
 
     def _get_docs_links(self, url: str) -> list:
         """Get document links from search request. Returns a list of dicts with keys 'title', 'summary', 'date', 'html_link'"""
-        response = self._make_request(url, method="POST", json=self.params)
+        payload = [
+            (key, value) for key, value in self.params.items() if key != "argumento"
+        ]
+        payload.append(("argumento", self.params["argumento"]))
+        payload.append(("argumento", self.params["argumento_situation"]))
+
+        response = self._make_request(
+            url,
+            method="POST",
+            payload=payload,
+            # json={
+            #     **self.params,
+            #     "argumento": self.params["argumento"],
+            #     "argumento": self.params[
+            #         "argumento_situation"
+            #     ],  # need to do this since the request payload (which is a form-data) has two keys with the same name, the second one will overwrite the first one
+            # },
+        )
         if response is None:
             return []
 
@@ -264,7 +274,7 @@ class DFSinjScraper(BaseScaper):
         docs = []
         for item in data["aaData"]:
             item_info = item["_source"]
-            title = item_info["nm_norma"]
+            title = f"{item_info['nm_tipo_norma']} {item_info['nr_norma']} de {item_info['dt_assinatura']}"
             norm_number = item_info["nr_norma"]
             ch_norma = item_info["ch_norma"]
             norm_type = item_info["nm_tipo_norma"]
@@ -272,7 +282,7 @@ class DFSinjScraper(BaseScaper):
 
             transformed_tipo_norma = transform_norm_type(norm_type)
 
-            html_link = f"{self.base_url}{ch_norma}/{transformed_tipo_norma}_{norm_number}_{dt_assinatura.replace('/', '_')}.html"
+            html_link = f"{self.base_url}/Norma/{ch_norma}/{transformed_tipo_norma}_{norm_number}_{dt_assinatura.replace('/', '_')}.html"
             docs.append(
                 {
                     "title": title,
@@ -287,28 +297,45 @@ class DFSinjScraper(BaseScaper):
     def _get_doc_data(self, doc_info: dict) -> list:
         """Get document data from html link"""
 
-        # remove html link from doc_info
-        html_link = doc_info.pop("html_link")
-        response = self._make_request(html_link)
+        try:
+            # remove html link from doc_info
+            html_link = doc_info.pop("html_link")
+            response = self._make_request(html_link)
 
-        soup = BeautifulSoup(response.content, "html.parser")
+            soup = BeautifulSoup(response.content, "html.parser")
 
-        # get id="div_texto"
-        norm_text_tag = soup.find("div", id="div_texto")
-        html_string = f"<html>{norm_text_tag.prettify()}</html>"
+            # get id="div_texto"
+            norm_text_tag = soup.find("div", id="div_texto")
+            text_markdown = None
+            if not norm_text_tag:
+                # it may be a pdf file, try to get text markdown instead (without using LLM for image extraction)
+                text_markdown = self._get_markdown(response=response)
 
-        buffer = BytesIO()
-        buffer.write(html_string.encode())
-        buffer.seek(0)
+                if not text_markdown:
+                    return False  # invalid norm, not applying image extraction for distrito federal for now
+            else:
+                html_string = f"<html>{norm_text_tag.prettify()}</html>"
 
-        # get markdown text
-        text_markdown = self._get_markdown(stream=buffer)
+                buffer = BytesIO()
+                buffer.write(html_string.encode())
+                buffer.seek(0)
 
-        doc_info["html_string"] = html_string
-        doc_info["text_markdown"] = text_markdown
-        doc_info["document_url"] = html_link
+                # get markdown text
+                text_markdown = (
+                    self._get_markdown(stream=buffer)
+                    if not text_markdown
+                    else text_markdown
+                )
 
-        return doc_info
+                doc_info["html_string"] = html_string
+
+            doc_info["text_markdown"] = text_markdown
+            doc_info["document_url"] = html_link
+
+            return doc_info
+        except Exception as e:
+            print(f"Error getting document data: {e}")
+            return False
 
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
@@ -318,22 +345,47 @@ class DFSinjScraper(BaseScaper):
             total=len(self.situations),
             disable=not self.verbose,
         ):
-            for norm_type in tqdm(
-                self.types,
+            for norm_type, norm_type_id in tqdm(
+                self.types.items(),
                 desc=f"DISTRITO FEDERAL | Year: {year} | Types",
                 total=len(self.types),
                 disable=not self.verbose,
             ):
-                url = self._format_search_url(situation_id, norm_type, year)
-                response = self._make_request(url, method="POST", json=self.params)
+                # need to make a get request first to create the session ID ( will be used in all subsequent requests)
+                if not self.session_id_created:
+                    get_url = (
+                        self.base_url
+                        + "/ashx/Cadastro/HistoricoDePesquisaIncluir.ashx?tipo_pesquisa=avancada&argumento=autocomplete%23ch_situacao%23Situa%C3%A7%C3%A3o%23igual%23igual+a%23semrevogacaoexpressa%23Sem+Revoga%C3%A7%C3%A3o+Expressa%23E&ch_tipo_norma=46000000&consulta=tipo_pesquisa=avancada&consulta=argumento=autocomplete%23ch_situacao%23Situa%C3%A7%C3%A3o%23igual%23igual+a%23semrevogacaoexpressa%23Sem+Revoga%C3%A7%C3%A3o+Expressa%23E&consulta=ch_tipo_norma=46000000&chave=6c31e2b0c76d4aa227cd6804bc4fc59f&total={%22nm_base%22:%22sinj_norma%22,%22ds_base%22:%22Normas%22,%22nr_total%22:6008}&_=1741738478078"
+                    )
+                    self._make_request(get_url)
+                    self.session_id_created = True
+
+                # try using payload tuples
+                total_pages_request_params = [
+                    ("tipo_pesquisa", "avancada"),
+                    (
+                        "argumento",
+                        f"number#ano_assinatura#Ano de Assinatura#igual#igual a#{year}#{year}#E",
+                    ),
+                    (
+                        "argumento",
+                        f"autocomplete#ch_situacao#Situação#igual#igual a#{situation_id}#{situation}#E",
+                    ),
+                    ("ch_tipo_norma", norm_type_id),
+                ]
+
+                response = self._make_request(
+                    self.total_pages_url,
+                    method="POST",
+                    payload=total_pages_request_params,
+                )
 
                 data = response.json()
 
-                # if iTotalRecords is None, then there are no norms for this year
-                if not data["iTotalRecords"]:
+                total_norms = data["counts"][0]["count"]
+                # if count is 0, skip
+                if total_norms == 0:
                     continue
-
-                total_norms = data["iTotalDisplayRecords"]
 
                 pages = total_norms // self.params["iDisplayLength"]
                 if total_norms % self.params["iDisplayLength"]:
@@ -347,7 +399,7 @@ class DFSinjScraper(BaseScaper):
                         executor.submit(
                             self._get_docs_links,
                             self._format_search_url(
-                                situation_id, norm_type, year, page
+                                situation, situation_id, norm_type_id, year, page
                             ),
                         )
                         for page in range(1, pages + 1)
@@ -378,16 +430,18 @@ class DFSinjScraper(BaseScaper):
                     ):
                         result = future.result()
 
-                        # save to one drive
-                        queue_item = {
-                            "year": year,
-                            "type": norm_type,
-                            "situation": situation,
-                            **result,
-                        }
+                        if result:
 
-                        self.queue.put(queue_item)
-                        results.append(queue_item)
+                            # save to one drive
+                            queue_item = {
+                                "year": year,
+                                "type": norm_type,
+                                "situation": situation,
+                                **result,
+                            }
+
+                            self.queue.put(queue_item)
+                            results.append(queue_item)
 
                 self.results.extend(results)
                 self.count += len(results)

@@ -40,6 +40,7 @@ class BaseScaper:
         llm_model: str = None,
         llm_prompt: str = "Extraia todo  o conteúdo da imagem. Retorne somente o conteúdo extraído",
         use_selenium: bool = False,
+        use_requests_session: bool = False,
         max_workers: int = 16,
         verbose: bool = False,
     ):
@@ -53,6 +54,7 @@ class BaseScaper:
         self.llm_model = llm_model
         self.llm_prompt = llm_prompt
         self.use_selenium = use_selenium
+        self.use_requests_session = use_requests_session
         self.verbose = verbose
         self.max_workers = max_workers
         self.years = list(range(self.year_start, self.year_end + 1))
@@ -67,9 +69,17 @@ class BaseScaper:
         self.count = 0  # keep track of number of results
         self.md = MarkItDown(llm_client=llm_client, llm_model=llm_model)
         self.soup = None
+        self.session: requests.Session = None
         self.driver: Chrome = None
         self.saver: OneDriveSaver = None
         self.initialize_selenium()
+        self.initialize_requests_session()
+
+    def initialize_requests_session(self):
+        """Initialize requests session"""
+        if self.use_requests_session:
+            self.session = requests.Session()
+            self.session.headers.update(self.headers)
 
     def initialize_selenium(self):
         """Initialize selenium driver"""
@@ -86,8 +96,30 @@ class BaseScaper:
         """Initialize saver class. The child class should call this method in its __init__ method, after setting the docs_save_dir attribute."""
         self.saver = OneDriveSaver(self.queue, self.error_queue, self.docs_save_dir)
 
+    def _get_request(self, url: str, **kwargs) -> requests.Response:
+        """Get request from given url"""
+        if self.use_requests_session:
+            response = self.session.get(url, **kwargs)
+        else:
+            response = requests.get(url, **kwargs)
+
+        return response
+
+    def _post_request(self, url: str, json: dict, **kwargs) -> requests.Response:
+        """Post request to given url"""
+        if self.use_requests_session:
+            response = self.session.post(url, json=json, **kwargs)
+        else:
+            response = requests.post(url, json=json, **kwargs)
+
+        return response
+
     def _make_request(
-        self, url: str, method: str = "GET", json: dict = None
+        self,
+        url: str,
+        method: str = "GET",
+        json: dict = None,
+        payload: list | dict = None,
     ) -> requests.Response:
         """Make request to given url"""
         retries = 5
@@ -95,9 +127,21 @@ class BaseScaper:
             try:
 
                 if method == "POST":
-                    response = requests.post(url, headers=self.headers, json=json, verify=False)
+                    # response = requests.post(
+                    #     url, headers=self.headers, json=json, verify=False
+                    # )
+                    response = self._post_request(
+                        url,
+                        json=json,
+                        data=payload,  # payload will be used for form data in POST requests, useful when have files or duplicate keys
+                        headers=self.headers,
+                        verify=False,
+                    )
                 else:
-                    response = requests.get(url, headers=self.headers, verify=False)
+                    # response = requests.get(url, headers=self.headers, verify=False)
+                    response = self._get_request(
+                        url, headers=self.headers, verify=False
+                    )
 
                 # check  "O servidor encontrou um erro interno, ou está sobrecarregado" error
                 if (
@@ -146,14 +190,7 @@ class BaseScaper:
 
             if response is None:
                 response = self._make_request(url)
-            md_content = self.md.convert(
-                response,
-                llm_prompt=(
-                    self.llm_prompt
-                    if not isinstance(response, requests.Response)
-                    else None
-                ),
-            ).text_content
+            md_content = self.md.convert(response).text_content
 
         except FileConversionException as e:
             print(f"Error converting to markdown: {e}")

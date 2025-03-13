@@ -169,8 +169,8 @@ class LegislaAMScraper(BaseScaper):
 
                 # Get documents html links
                 documents = []
+                start_page = 1
                 while not self.reached_end_page:
-                    start_page = 1
                     with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                         futures = [
                             executor.submit(

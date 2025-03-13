@@ -13,6 +13,7 @@ from src.scraper.state_legislation import (
     BahiaLegislaScraper,
     CearaAleceScraper,
     DFSinjScraper,
+    ESAlesScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -81,7 +82,7 @@ if __name__ == "__main__":
                 "scraper": AlagoasSefazScraper,
                 "params": {
                     "year_start": 2010,
-                    "llm_client": client,
+                    "llm_client": client,  # we have pdf image extraction
                     "llm_model": model,
                     "verbose": True,
                     "max_workers": 48,
@@ -131,10 +132,22 @@ if __name__ == "__main__":
             {
                 "scraper": DFSinjScraper,
                 "params": {
+                    "year_start": 2009,  # 1922 is the earliest year available
+                    "use_requests_session": True,  # needs to use in order to maintain session ID across requests
+                    "llm_client": client,  # we have pdf image extraction
+                    "llm_model": model,
                     "verbose": True,
                 },
                 "name": "DFSinj",
-                "run": True,
+                "run": False,
+            },
+            {
+                "scraper": ESAlesScraper,
+                "params": {
+                    "verbose": True
+                },
+                "name": "ESAles",
+                "run": True
             },
             {
                 "scraper": SaoPauloAlespScraper,

@@ -4,6 +4,7 @@ from .amazonas import LegislaAMScraper
 from .bahia import BahiaLegislaScraper
 from .ceara import CearaAleceScraper
 from .distrito_federal import DFSinjScraper
+from .espirito_santo import ESAlesScraper
 from .amapa import AmapaAlapScraper
 from .sao_paulo import SaoPauloAlespScraper
 from .rio_de_janeiro import RJAlerjScraper
