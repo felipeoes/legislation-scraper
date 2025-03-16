@@ -14,6 +14,7 @@ from src.scraper.state_legislation import (
     CearaAleceScraper,
     DFSinjScraper,
     ESAlesScraper,
+    LegislaGoias,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -132,7 +133,7 @@ if __name__ == "__main__":
             {
                 "scraper": DFSinjScraper,
                 "params": {
-                    "year_start": 2009,  # 1922 is the earliest year available
+                    "year_start": 1922,  # 1922 is the earliest year available
                     "use_requests_session": True,  # needs to use in order to maintain session ID across requests
                     "llm_client": client,  # we have pdf image extraction
                     "llm_model": model,
@@ -144,10 +145,25 @@ if __name__ == "__main__":
             {
                 "scraper": ESAlesScraper,
                 "params": {
-                    "verbose": True
+                    "year_start": 2011,  # 1943 is the earliest year available
+                    "verbose": True,
+                    "llm_client": client,  # we have pdf image extraction
+                    "llm_model": model,
                 },
                 "name": "ESAles",
-                "run": True
+                "run": False,
+            },
+            {
+                "scraper": LegislaGoias,
+                "params": {
+                    "year_start": 1887,  # 1887 is the earliest year available
+                    "use_selenium": True,  # needs to use selenium to get html content
+                    "llm_client": client,  # we have pdf image extraction
+                    "llm_model": model,
+                    "verbose": True,
+                },
+                "name": "LegislaGoias",
+                "run": True,
             },
             {
                 "scraper": SaoPauloAlespScraper,
@@ -167,16 +183,20 @@ if __name__ == "__main__":
             },
         ]
 
+        running_scrapers = []
+
         for scraper in scrapers:
             if scraper["run"]:
-                data = scraper["scraper"](**scraper["params"]).scrape()
+                scrapper_instance = scraper["scraper"](**scraper["params"])
+                running_scrapers.append(scrapper_instance)
+                data = scrapper_instance.scrape()
+                # data = scraper["scraper"](**scraper["params"]).scrape()
                 print(f"Scraped {len(data)} data for {scraper['name']}")
 
     except KeyboardInterrupt:
-        for scraper in scrapers:
-            if scraper["run"]:
-                scraper["scraper"].saver.running = False
-                scraper["scraper"].saver.join()
+        for scraper in running_scrapers:
+            scraper.saver.running = False
+            scraper.saver.join()
 
         print("KeyboardInterrupt: Exiting...")
 

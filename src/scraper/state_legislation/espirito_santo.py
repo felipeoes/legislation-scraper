@@ -77,7 +77,14 @@ class ESAlesScraper(BaseScaper):
         Returns:
             The HTML content of the requested page as bytes, or None if an error occurs.
         """
-        soup = self._get_soup(url)
+        session = (
+            requests.Session()
+        )  # need to create a new session for each request in order to make the logic work
+        response = session.get(url, verify=False)
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        if page_number == 1:  # don't need to post back for page 1
+            return soup.prettify()
 
         viewstate = soup.find(id="__VIEWSTATE")
         eventvalidation = soup.find(id="__EVENTVALIDATION")
@@ -89,12 +96,13 @@ class ESAlesScraper(BaseScaper):
         viewstate_value = viewstate["value"]
         eventvalidation_value = eventvalidation["value"]
 
-        if page_number == 1:
-            event_target = "ctl00$ContentPlaceHolder1$rptPaging$ctl00$lbPaging"  # Special case for page 1 (though often index 0 will work) or even no postback is needed if already on page 1
-        elif page_number > 1:
-            page_number -= 1  # Adjust page number to match the index of the page in the HTML (0-based)
+        if page_number > 1:
             # Construct the event target for specific page number
-            event_target = f"ctl00$ContentPlaceHolder1$rptPaging$ctl{page_number:02d}$lbPaging"  # Using :02d to format index as two digits (ctl01, ctl02, etc.) to match HTML, though ctl1, ctl2 might also work.
+            page_index = page_number - 1
+            event_target = f"ctl00$ContentPlaceHolder1$rptPaging$ctl{page_index:02d}$lbPaging"  # Using :02d to
+        else:
+            print("Error: Page number must be greater than or equal to 1.")
+            return None
 
         post_data = {
             "__EVENTTARGET": event_target,
@@ -104,9 +112,14 @@ class ESAlesScraper(BaseScaper):
             # Include other necessary form data if needed
         }
 
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:94.0) Gecko/20100101 Firefox/94.0",  # Optional: Mimic a browser
+        }
+
         try:
-            page_response = self._make_request(url, json=post_data)
-            # page_response = session.post(url, data=post_data, headers=headers, verify=False)
+            page_response = session.post(
+                url, data=post_data, headers=headers, verify=False
+            )
             page_response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
             return page_response.content
         except requests.exceptions.RequestException as e:
@@ -120,15 +133,6 @@ class ESAlesScraper(BaseScaper):
 
         page_html = self._get_page_html(url, page)
         soup = BeautifulSoup(page_html, "html.parser")
-
-        # <div class="pagination pagination-custom" style="display: flex; justify-content: center;">
-        #                 <a id="ContentPlaceHolder1_lbPrevious" class="aspNetDisabled btn">« Anterior</a>
-        #                 <span id="ContentPlaceHolder1_rptPaging"><span>
-        #                         <a id="ContentPlaceHolder1_rptPaging_lbPaging_0" class="aspNetDisabled btn" style="background-color:#00FF00;">1</a>
-        #                     </span></span>
-        #                 <a id="ContentPlaceHolder1_lbNext" class="aspNetDisabled btn">Próxima »</a>
-        #             </div>
-
         docs = []
 
         # find all items
@@ -163,8 +167,13 @@ class ESAlesScraper(BaseScaper):
                 .text
             )
             # btn btn-sm btn-label-info btn-pill d-block
-            doc_link = item.find_all("a", class_="btn-label-info")[0]["href"]
+            doc_link = item.find_all("a", class_="btn-label-info")
+            if (
+                len(doc_link) == 0
+            ):  # if there is no link to the document text, the norm won't be useful
+                continue
 
+            doc_link = doc_link[0]["href"]
             docs.append(
                 {
                     "title": re.sub(r"\r\n +", " ", title.strip()),
@@ -185,6 +194,12 @@ class ESAlesScraper(BaseScaper):
         # if url ends with .pdf, get only text_markdown
         if url.endswith(".pdf"):
             text_markdown = self._get_markdown(url)
+
+            if not text_markdown:
+                # pdf may be an image
+                pdf_content = self._make_request(url).content
+                text_markdown = self._get_pdf_image_markdown(pdf_content)
+
             doc_info["html_string"] = ""
             doc_info["text_markdown"] = text_markdown
             doc_info["document_url"] = url

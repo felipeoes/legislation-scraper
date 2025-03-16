@@ -1,6 +1,8 @@
 import requests
 import time
+import fitz
 
+from PIL import Image
 from openai import OpenAI
 from io import BytesIO
 from os import environ
@@ -10,13 +12,13 @@ from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 from markitdown import MarkItDown, UnsupportedFormatException, FileConversionException
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Queue
 from pathlib import Path
 from dotenv import load_dotenv
 from src.database.saver import OneDriveSaver
 
 load_dotenv()
-
 
 YEAR_START = 1808  # CHECK IF NECESSARY LATER
 
@@ -127,9 +129,6 @@ class BaseScaper:
             try:
 
                 if method == "POST":
-                    # response = requests.post(
-                    #     url, headers=self.headers, json=json, verify=False
-                    # )
                     response = self._post_request(
                         url,
                         json=json,
@@ -138,7 +137,6 @@ class BaseScaper:
                         verify=False,
                     )
                 else:
-                    # response = requests.get(url, headers=self.headers, verify=False)
                     response = self._get_request(
                         url, headers=self.headers, verify=False
                     )
@@ -167,12 +165,80 @@ class BaseScaper:
         if response is None:
             return None
 
-        return BeautifulSoup(response.text, "html.parser")
+        return BeautifulSoup(response.content, "html.parser")
 
     def _selenium_get_soup(self, url: str) -> BeautifulSoup:
         """Get BeautifulSoup object from given url using selenium"""
         self.driver.get(url)
+        time.sleep(1)
         return BeautifulSoup(self.driver.page_source, "html.parser")
+
+    def _pdf_to_images(self, doc: fitz.Document) -> list:
+        """
+        Converts a PDF document to a list of images, one image per page.
+
+        Args:
+            doc (fitz.Document): PyMuPDF Document object.
+
+        Returns:
+            list: List of PIL Image objects, one for each page in the PDF.
+        """
+        image_list = []
+
+        for page_num in range(doc.page_count):
+            page = doc.load_page(page_num)
+            pix = page.get_pixmap(
+                matrix=fitz.Identity,
+                dpi=None,
+                colorspace=fitz.csRGB,
+                clip=None,
+                annots=True,
+            )
+
+            # Convert PyMuPDF Pixmap to PIL Image
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            image_list.append(img)
+
+        return image_list
+
+    def _get_pdf_image_markdown(self, pdf_content: bytes) -> str:
+        """Get markdown response from given pdf content"""
+        pdf_file_stream = BytesIO(pdf_content)
+        text_markdown_raw = self._get_markdown(stream=pdf_file_stream)
+
+        # get images from pdf
+        pdf = fitz.open("pdf", pdf_content)
+        # combined_image = self._pdf_to_single_image(pdf)
+        images = self._pdf_to_images(pdf)
+
+        # paralllel processing
+        text_markdown_img = ""
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = []
+            for img in images:
+                buffer = BytesIO()
+                img.save(buffer, format="PNG")
+                img = BytesIO(buffer.getvalue())
+                future = executor.submit(self._get_markdown, stream=img)
+                futures.append(future)
+
+            for future in tqdm(
+                futures,  # not using as_completed because we want the results in order
+                desc="Converting images to markdown",
+                total=len(futures),
+                disable=not self.verbose,
+            ):
+                md_content = future.result()
+                text_markdown_img += md_content + "\n\n"
+
+        if not text_markdown_img:
+            print("No images found in pdf")
+
+        if not text_markdown_raw:
+            print("No text found in pdf")
+
+        text_markdown = text_markdown_raw + text_markdown_img
+        return text_markdown
 
     def _get_markdown(
         self,
@@ -194,15 +260,15 @@ class BaseScaper:
 
         except FileConversionException as e:
             print(f"Error converting to markdown: {e}")
-            md_content = None
+            md_content = ""
 
         except UnsupportedFormatException as e:
             print(f"Error converting to markdown: {e}")
-            md_content = None
+            md_content = ""
 
         except Exception as e:
             print(f"Error getting markdown from url: {url} | Error: {e}")
-            md_content = None
+            md_content = ""
 
         return md_content
 
