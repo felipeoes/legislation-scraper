@@ -205,6 +205,9 @@ class BaseScaper:
         """Get markdown response from given pdf content"""
         pdf_file_stream = BytesIO(pdf_content)
         text_markdown_raw = self._get_markdown(stream=pdf_file_stream)
+        if text_markdown_raw and len(text_markdown_raw) > 100:
+            print("Text extracted from pdf")
+            return text_markdown_raw
 
         # get images from pdf
         pdf = fitz.open("pdf", pdf_content)

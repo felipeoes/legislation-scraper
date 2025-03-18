@@ -15,6 +15,7 @@ from src.scraper.state_legislation import (
     DFSinjScraper,
     ESAlesScraper,
     LegislaGoias,
+    MaranhaoAlemaScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -156,13 +157,24 @@ if __name__ == "__main__":
             {
                 "scraper": LegislaGoias,
                 "params": {
-                    "year_start": 1887,  # 1887 is the earliest year available
+                    "year_start": 2022,  # 1887 is the earliest year available
                     "use_selenium": True,  # needs to use selenium to get html content
                     "llm_client": client,  # we have pdf image extraction
                     "llm_model": model,
-                    "verbose": True,
+                    "verbose": False,
                 },
                 "name": "LegislaGoias",
+                "run": False,
+            },
+            {
+                "scraper": MaranhaoAlemaScraper,
+                "params": {
+                    "year_start": 1948,  # 1948 is the earliest year available
+                    "use_selenium": True,  # needs to use selenium to get html content
+                    "use_requests_session": True,  # needs to use in order to maintain session ID across requests
+                    "verbose": True,
+                },
+                "name": "MAAlema",
                 "run": True,
             },
             {

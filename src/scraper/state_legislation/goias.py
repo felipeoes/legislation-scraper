@@ -9,16 +9,16 @@ from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
 
 TYPES = {
-    "Constituição Estadual": 12,
-    "Emenda Constitucional": 13,
-    "Lei Complementar": 1,
-    "Lei Ordinária": 2,
-    "Lei Delegada": 4,
-    "Decreto Lei": 8,
-    "Decreto Numerado": 3,
-    "Decreto Orçamentário": 5,
-    "Portaria Orçaentária": 6,
-    "Resolução": 7,
+    "Constituição Estadual": {"id": 12, "url_suffix": "constituicao-estadual"},
+    "Emenda Constitucional": {"id": 13, "url_suffix": "emenda-constitucional"},
+    "Lei Complementar": {"id": 1, "url_suffix": "lei-complementar"},
+    "Lei Ordinária": {"id": 2, "url_suffix": "lei"},
+    "Lei Delegada": {"id": 4, "url_suffix": "lei-delegada"},
+    "Decreto Lei": {"id": 8, "url_suffix": "decreto-lei"},
+    "Decreto Numerado": {"id": 3, "url_suffix": "decreto"},
+    "Decreto Orçamentário": {"id": 5, "url_suffix": "decreto-orcamentario"},
+    "Portaria Orçaentária": {"id": 6, "url_suffix": "portaria-orcamentaria"},
+    "Resolução": {"id": 7, "url_suffix": "resolucao"},
 }
 
 # situations are gotten from doc data while scraping
@@ -62,7 +62,23 @@ class LegislaGoias(BaseScaper):
 
         return f"{self.base_url}?{requests.compat.urlencode(self.params)}"
 
-    def _get_doc_info(self, doc: dict) -> dict:
+    def _get_norm_text_tag(self, soup: BeautifulSoup) -> BeautifulSoup:
+        """Get the tag containing the norm text. Currently there are 3 possible classes for the tag"""
+        norm_text_tag = soup.find("div", class_="folha")
+        if norm_text_tag:
+            return norm_text_tag
+
+        norm_text_tag = soup.find("div", class_="Section1")
+        if norm_text_tag:
+            return norm_text_tag
+
+        norm_text_tag = soup.find("div", class_="layout-antigo")
+        if norm_text_tag:
+            return norm_text_tag
+
+        return None
+
+    def _get_doc_info(self, doc: dict, norm_url_suffix: str) -> dict:
         """Get document info from given doc data"""
         doc_info = {
             "id": doc["id"],
@@ -75,24 +91,26 @@ class LegislaGoias(BaseScaper):
 
         # html link will be in the format https://legisla.casacivil.go.gov.br/pesquisa_legislacao/{doc_id}/lei-{doc_number}
 
-        html_link = f'https://legisla.casacivil.go.gov.br/pesquisa_legislacao/{doc["id"]}/lei-{doc["numero"]}'
+        if norm_url_suffix == "constituicao-estadual":
+            html_link = f'https://legisla.casacivil.go.gov.br/pesquisa_legislacao/{doc["id"]}/{norm_url_suffix}'
+        else:
+            html_link = f'https://legisla.casacivil.go.gov.br/pesquisa_legislacao/{doc["id"]}/{norm_url_suffix}-{doc["numero"]}'
+
         # using lock to avoid issues with using selenium in multiple threads and mixing up the results
         with lock:
             soup = self._selenium_get_soup(html_link)
 
-        #  class="folha"
-        norm_text_tag = soup.find("div", class_="folha")
-        if norm_text_tag:
-            html_string = norm_text_tag.prettify()
-            doc_info["html_string"] = html_string
-            doc_info["document_url"] = html_link
-        else:
+        # first check if norm is only available in pdf format ( will containg img tag with src="/assets/ver_lei.jpg")
+        if soup.find("img", src="/assets/ver_lei.jpg"):
             # check for <a href="https://legisla.casacivil.go.gov.br/api/v1/arquivos/8095" target="_blank"><img alt="" border="0" src="/assets/ver_lei.jpg"></a> and download pdf
             pdf_link = soup.find("a", href=True)
             if pdf_link:
                 pdf_link = pdf_link["href"]
 
-                # since there is no html, the pdf must be an image
+                # if not schema in pdf link, add it
+                if not pdf_link.startswith("http"):
+                    pdf_link = requests.compat.urljoin(self.base_url, pdf_link)
+
                 pdf_content = self._make_request(pdf_link).content
                 text_markdown = self._get_pdf_image_markdown(pdf_content)
 
@@ -100,6 +118,15 @@ class LegislaGoias(BaseScaper):
                 doc_info["document_url"] = pdf_link
 
                 return doc_info
+        else:
+
+            # 3 possible classes for the norm text
+            norm_text_tag = self._get_norm_text_tag(soup)
+
+            if norm_text_tag:
+                html_string = norm_text_tag.prettify()
+                doc_info["html_string"] = html_string
+                doc_info["document_url"] = html_link
 
         # pdf link will be in the format https://legisla.casacivil.go.gov.br/api/v2/pesquisa/legislacoes/{doc_id}/pdf
         pdf_link = f'{self.base_url}/{doc_info["id"]}/pdf'
@@ -113,7 +140,7 @@ class LegislaGoias(BaseScaper):
 
         return doc_info
 
-    def _get_doc_data(self, url: str) -> list:
+    def _get_doc_data(self, url: str, norm_url_suffix: str) -> list:
         """Get document data from given url"""
         response = self._make_request(url).json()
 
@@ -127,7 +154,10 @@ class LegislaGoias(BaseScaper):
         # concurrent processing
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = [executor.submit(self._get_doc_info, doc) for doc in data]
+            futures = [
+                executor.submit(self._get_doc_info, doc, norm_url_suffix)
+                for doc in data
+            ]
 
             for future in tqdm(
                 as_completed(futures),
@@ -142,13 +172,13 @@ class LegislaGoias(BaseScaper):
 
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
-        for norm_type, norm_type_id in tqdm(
+        for norm_type, norm_type_data in tqdm(
             self.types.items(),
             desc=f"GOIAS | Year: {year} | Types",
             total=len(self.types),
             disable=not self.verbose,
         ):
-
+            norm_type_id = norm_type_data["id"]
             url = self._format_search_url(norm_type_id, year, 0)
             response = self._make_request(url)
 
@@ -167,6 +197,7 @@ class LegislaGoias(BaseScaper):
                     executor.submit(
                         self._get_doc_data,
                         self._format_search_url(norm_type_id, year, page),
+                        norm_type_data["url_suffix"],
                     )
                     for page in range(1, pages + 1)
                 ]
