@@ -1,5 +1,6 @@
 import time
 import re
+import requests
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
@@ -13,6 +14,7 @@ from src.scraper.base.scraper import BaseScaper
 lock = Lock()
 
 TYPES = {
+    "Constituição Estadual": "constituicao-estadual/detalhe.html?dswid=-4293",
     "Lei": {
         "id": 1,
         "subtypes": {
@@ -105,6 +107,7 @@ class MaranhaoAlemaScraper(BaseScaper):
             "javax.faces.ViewState": "-1509641436052460021:2441054440402057157",
             "javax.faces.ClientWindow": 1381,
         }
+        self.scraped_constitution: bool = False
         self._initialize_saver()
 
     def _format_search_url(
@@ -128,12 +131,10 @@ class MaranhaoAlemaScraper(BaseScaper):
             By.CLASS_NAME, "ui-paginator-page"
         )
         current_visible_pages = [int(page.text) for page in current_visible_pages]
-        
+
         # if no pages are visible it may have only one page. Just return and do nothing
         if len(current_visible_pages) == 0:
             return
-            
-        
 
         # click next page until the desired page is visible
         while page not in current_visible_pages:
@@ -148,7 +149,7 @@ class MaranhaoAlemaScraper(BaseScaper):
         page_element = self.driver.find_element(By.XPATH, f"//a[text()='{page}']")
         page_element.click()
 
-        time.sleep(1)
+        time.sleep(3)
 
     def _get_docs_links(self, page: int, norm_type: str) -> list:
         """Get documents links from given page.
@@ -197,8 +198,6 @@ class MaranhaoAlemaScraper(BaseScaper):
         if "the requested url was not found on this server" in text_markdown.lower():
             print(f"Invalid document: {pdf_link}")
             return None
-            
-        
 
         doc_info["text_markdown"] = text_markdown
         doc_info["document_url"] = pdf_link
@@ -224,14 +223,14 @@ class MaranhaoAlemaScraper(BaseScaper):
 
         # go down to the desired option
         for type, _ in self.types.items():
-            actions.send_keys(Keys.ARROW_DOWN)
             if type == norm_type:
                 break
+            actions.send_keys(Keys.ARROW_DOWN)
 
         actions.send_keys(Keys.ENTER)
         actions.perform()
-        
-        time.sleep(1)
+
+        time.sleep(3)
 
         if subtype_id:
             # let only the subtype checkbox checked
@@ -257,11 +256,14 @@ class MaranhaoAlemaScraper(BaseScaper):
         in_ano_doc = self.driver.find_element(By.ID, "in_ano_doc")
         in_ano_doc.send_keys(year)
 
+        time.sleep(1)
+
         # submit form
         submit_button = self.driver.find_element(By.ID, "j_idt71")
+        time.sleep(1)
         submit_button.click()
 
-        time.sleep(1)
+        time.sleep(3)
 
         return BeautifulSoup(self.driver.page_source, "html.parser")
 
@@ -341,7 +343,7 @@ class MaranhaoAlemaScraper(BaseScaper):
 
             for future in tqdm(
                 as_completed(futures),
-                total=len(documents),
+                total=len(futures),
                 desc="MARANHAO | Get document data",
                 disable=not self.verbose,
             ):
@@ -369,6 +371,32 @@ class MaranhaoAlemaScraper(BaseScaper):
                     f"Finished scraping for Year: {year} | Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
                 )
 
+    def _scrape_constitution(self, norm_type: str, norm_type_id: str):
+        """Scrape state constitution"""
+        url = requests.compat.urljoin(f"{self.base_url}/ged/", norm_type_id)
+        soup = self._get_soup(url)
+
+        # get pdf link <object class="view-pdf-constituicao" data="https://arquivos.al.ma.leg.br:8443/ged/codigos_juridicos/CE89_EC101_2025" type="application/pdf"></object>
+        pdf_link = soup.find("object", {"class": "view-pdf-constituicao"})["data"]
+        text_markdown = self._get_markdown(pdf_link)
+        if not text_markdown:
+            print(f"Failed to get markdown for Constitution | {pdf_link}")
+            return None
+
+        queue_item = {
+            "year": 1989,
+            # hardcode since it seems we only get valid documents in search request
+            "situation": "Não consta revogação expressa",
+            "type": norm_type,
+            "title": "Constituição Estadual do Maranhão",
+            "summary": "",
+            "text_markdown": text_markdown,
+            "document_url": pdf_link,
+        }
+
+        self.queue.put(queue_item)
+        self.scraped_constitution = True
+
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
         for situation in tqdm(
@@ -383,6 +411,13 @@ class MaranhaoAlemaScraper(BaseScaper):
                 total=len(self.types),
                 disable=not self.verbose,
             ):
+                if (
+                    norm_type == "Constituição Estadual"
+                    and not self.scraped_constitution
+                ):
+                    self._scrape_constitution(norm_type, norm_type_id)
+                    continue
+
                 if isinstance(norm_type_id, dict):
                     subtypes = norm_type_id["subtypes"]
                     norm_type_id = norm_type_id["id"]

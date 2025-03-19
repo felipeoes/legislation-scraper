@@ -16,6 +16,7 @@ from src.scraper.state_legislation import (
     ESAlesScraper,
     LegislaGoias,
     MaranhaoAlemaScraper,
+    MSAlemsScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -175,6 +176,16 @@ if __name__ == "__main__":
                     "verbose": True,
                 },
                 "name": "MAAlema",
+                "run": False,
+            },
+            {
+                "scraper": MSAlemsScraper,
+                "params": {
+                    "year_start": 1800,
+                    "verbose": True,
+                    "max_workers": 32,
+                },
+                "name": "MSAlems",
                 "run": True,
             },
             {

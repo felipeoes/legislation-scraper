@@ -170,7 +170,7 @@ class CearaAleceScraper(BaseScaper):
 
             if self.verbose:
                 print(
-                    f"Finished scraping for Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
+                    f"Finished scraping for | Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
                 )
 
     def _get_laws_constitution_amendments_docs_links(
@@ -325,7 +325,7 @@ class CearaAleceScraper(BaseScaper):
 
             if self.verbose:
                 print(
-                    f"Finished scraping for Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
+                    f"Finished scraping for Year: {year} | Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
                 )
 
     def scrape(self) -> list:
@@ -397,4 +397,4 @@ class CearaAleceScraper(BaseScaper):
                             situation, norm_type, norm_type_id, year
                         )
 
-            return self.results
+        return self.results

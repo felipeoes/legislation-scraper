@@ -8,5 +8,6 @@ from .distrito_federal import DFSinjScraper
 from .espirito_santo import ESAlesScraper
 from .goias import LegislaGoias
 from .maranhao import MaranhaoAlemaScraper
+from .mato_grosso_do_sul import MSAlemsScraper
 from .sao_paulo import SaoPauloAlespScraper
 from .rio_de_janeiro import RJAlerjScraper
