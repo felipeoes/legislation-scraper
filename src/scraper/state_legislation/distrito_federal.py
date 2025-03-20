@@ -245,18 +245,9 @@ class DFSinjScraper(BaseScaper):
             url,
             method="POST",
             payload=payload,
-            # json={
-            #     **self.params,
-            #     "argumento": self.params["argumento"],
-            #     "argumento": self.params[
-            #         "argumento_situation"
-            #     ],  # need to do this since the request payload (which is a form-data) has two keys with the same name, the second one will overwrite the first one
-            # },
         )
         if response is None:
             return []
-
-        # https://www.sinj.df.gov.br/sinj/Norma/fdf64867a5154c31b1ebd7c141f716ab/Resolu_o_Ordin_ria_59_26_08_2020.html
 
         def transform_norm_type(norm_type: str) -> str:
             # change all special characters to _

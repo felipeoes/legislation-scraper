@@ -17,6 +17,7 @@ from src.scraper.state_legislation import (
     LegislaGoias,
     MaranhaoAlemaScraper,
     MSAlemsScraper,
+    MTAlmtScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -170,7 +171,7 @@ if __name__ == "__main__":
             {
                 "scraper": MaranhaoAlemaScraper,
                 "params": {
-                    "year_start": 1948,  # 1948 is the earliest year available
+                    "year_start": 2003,  # 1948 is the earliest year available
                     "use_selenium": True,  # needs to use selenium to get html content
                     "use_requests_session": True,  # needs to use in order to maintain session ID across requests
                     "verbose": True,
@@ -181,11 +182,19 @@ if __name__ == "__main__":
             {
                 "scraper": MSAlemsScraper,
                 "params": {
-                    "year_start": 1800,
                     "verbose": True,
                     "max_workers": 32,
                 },
                 "name": "MSAlems",
+                "run": False,
+            },
+            {
+                "scraper": MTAlmtScraper,
+                "params": {
+                    "year_start": 1835,  # 1835 is the earliest year available (historical data)
+                    "verbose": True,
+                },
+                "name": "MTAlmt",
                 "run": True,
             },
             {

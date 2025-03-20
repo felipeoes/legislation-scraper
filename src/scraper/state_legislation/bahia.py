@@ -26,7 +26,7 @@ TYPES = {
 
 VALID_SITUATIONS = [
     "Não consta"
-]  # Conama does not have a situation field, invalid norms will have an indication in the document text
+]  # BahiaLegisla does not have a situation field, invalid norms will have an indication in the document text
 
 INVALID_SITUATIONS = []  # norms with these situations are invalid norms (no lon
 
