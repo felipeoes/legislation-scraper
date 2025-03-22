@@ -138,7 +138,9 @@ class BaseScaper:
                     )
                 else:
                     response = self._get_request(
-                        url, headers=self.headers, verify=False
+                        url,
+                        headers=self.headers,
+                        verify=False,
                     )
 
                 # check  "O servidor encontrou um erro interno, ou está sobrecarregado" error
@@ -147,6 +149,12 @@ class BaseScaper:
                     in response.text
                 ):
                     print("Server error, retrying...")
+                    time.sleep(5)
+                    continue
+
+                # check for 429 or 503 status code (right now useful for mato grosso scraper)
+                if response.status_code in [429, 503]:
+                    # print(f"Status code {response.status_code}, retrying...")
                     time.sleep(5)
                     continue
 
@@ -205,13 +213,12 @@ class BaseScaper:
         """Get markdown response from given pdf content"""
         pdf_file_stream = BytesIO(pdf_content)
         text_markdown_raw = self._get_markdown(stream=pdf_file_stream)
-        if text_markdown_raw and len(text_markdown_raw) > 100:
+        if text_markdown_raw and len(text_markdown_raw) > 200:
             print("Text extracted from pdf")
             return text_markdown_raw
 
         # get images from pdf
         pdf = fitz.open("pdf", pdf_content)
-        # combined_image = self._pdf_to_single_image(pdf)
         images = self._pdf_to_images(pdf)
 
         # paralllel processing
@@ -234,6 +241,19 @@ class BaseScaper:
                 md_content = future.result()
                 text_markdown_img += md_content + "\n\n"
 
+        # # Sequential processing
+        # for img in tqdm(
+        #     images,
+        #     desc="Converting images to markdown",
+        #     total=len(images),
+        #     disable=not self.verbose,
+        # ):
+        #     buffer = BytesIO()
+        #     img.save(buffer, format="PNG")
+        #     img = BytesIO(buffer.getvalue())
+        #     md_content = self._get_markdown(stream=img)
+        #     text_markdown_img += md_content + "\n\n"
+
         if not text_markdown_img:
             print("No images found in pdf")
 
@@ -248,30 +268,43 @@ class BaseScaper:
         url: str = None,
         response: requests.Response = None,
         stream: BytesIO = None,
+        retries: int = 2,
     ) -> str:
         """Get markdown response from given url"""
-        try:
-            if stream is not None:
-                md_content = self.md.convert_stream(
-                    stream, llm_prompt=self.llm_prompt
-                ).text_content
-                return md_content
+        while retries > 0:
+            try:
+                if stream is not None:
+                    md_content = self.md.convert_stream(
+                        stream, llm_prompt=self.llm_prompt
+                    ).text_content
 
-            if response is None:
-                response = self._make_request(url)
-            md_content = self.md.convert(response).text_content
+                    if (
+                        not md_content
+                    ):  # for images, sometimes the mllm struggles to process, try again
+                        continue
 
-        except FileConversionException as e:
-            print(f"Error converting to markdown: {e}")
-            md_content = ""
+                    return md_content
 
-        except UnsupportedFormatException as e:
-            print(f"Error converting to markdown: {e}")
-            md_content = ""
+                if response is None:
+                    response = self._make_request(url)
+                md_content = self.md.convert(response).text_content
 
-        except Exception as e:
-            print(f"Error getting markdown from url: {url} | Error: {e}")
-            md_content = ""
+            except FileConversionException as e:
+                print(f"Error converting to markdown: {e}")
+                md_content = ""
+
+            except UnsupportedFormatException as e:
+                print(f"Error converting to markdown: {e}")
+                md_content = ""
+
+            except Exception as e:
+                print(f"Error getting markdown from url: {url} | Error: {e}")
+                md_content = ""
+
+            if md_content:
+                break
+
+            retries -= 1
 
         return md_content
 

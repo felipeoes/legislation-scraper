@@ -18,6 +18,7 @@ from src.scraper.state_legislation import (
     MaranhaoAlemaScraper,
     MSAlemsScraper,
     MTAlmtScraper,
+    MGAlmgScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -193,8 +194,20 @@ if __name__ == "__main__":
                 "params": {
                     "year_start": 1835,  # 1835 is the earliest year available (historical data)
                     "verbose": True,
+                    "llm_client": client,  # we have pdf image extraction
+                    "llm_model": model,
                 },
                 "name": "MTAlmt",
+                "run": False,
+            },
+            {
+                "scraper": MGAlmgScraper,
+                "params": {
+                    "year_start": 1831,  # 1831 is the earliest year available
+                    "verbose": True,
+                    "max_workers": 32,
+                },
+                "name": "MGAlmg",
                 "run": True,
             },
             {

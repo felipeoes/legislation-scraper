@@ -68,7 +68,7 @@ class MTAlmtScraper(BaseScaper):
         almt_form_norma_juridica_ato_busca_avancada[revogarNormaJuridica]: nao
         almt_form_norma_juridica_ato_busca_avancada[possuiVeto]:
         almt_form_norma_juridica_ato_busca_avancada[possuiRemissao]:
-        almt_form_norma_juridica_ato_busca_avancada[_token]: 79bb17.RRjpYmClv0zJ0wJsCHQgN_c6yK_-9gCNojsQaVNNrGI.Lm2LJVLyiyWDlU4qOkZtW4djkdmUxDS61G5hJiZ7yQ0VKa4oV-eMHbqQcQ
+        almt_form_norma_juridica_ato_busca_avancada[_token]: token
         page: 1
     }
 
@@ -83,7 +83,7 @@ class MTAlmtScraper(BaseScaper):
         almt_form_norma_juridica_pesquisa_historica[observacao]:
         almt_form_norma_juridica_pesquisa_historica[dataInicio]:
         almt_form_norma_juridica_pesquisa_historica[dataFim]:
-        almt_form_norma_juridica_pesquisa_historica[_token]: 8bf82526b.SHKWN6pymo-emHRpPEbwxcc5cgP7BNBnB_DJO8HCI7o.eRbOcZlL3v2q10wECQ7BqqoLRza5ZpU2SZqfaJStStsfGPJg2RjVucqtPQ
+        almt_form_norma_juridica_pesquisa_historica[_token]: token
         page: 1
     }
     """
@@ -184,7 +184,7 @@ class MTAlmtScraper(BaseScaper):
 
         return 0
 
-    def _get_docs_links(self, url: str) -> list:
+    def _get_docs_links(self, url: str, is_historic: bool = False) -> list:
         """Get documents html links from given page.
         Returns a list of dicts with keys 'title', 'summary', 'norm_link', 'document_url'
         """
@@ -204,13 +204,21 @@ class MTAlmtScraper(BaseScaper):
 
         # last item is the pagination, remove it
         items = items[:-1]
+        # for non-historic search, skip two first items (they are not norms)
+        if not is_historic:
+            items = items[2:]
+
         for item in items:
             title = item.find("h5").text.strip()
             summary = item.find("div", class_="text-muted").text.strip()
             links = item.find_all("a", href=True)
+
+            if len(links) < 2:  # some documents are not available, so we skip them
+                continue
+
             document_url = links[0]["href"]
-            norm_link = links[1]["href"]
-            # second link is the one to the norm
+            norm_link = links[-1]["href"]
+            # last link is the one to the norm, some norms include a link for proposition, that's why we need to get the last link
             docs.append(
                 {
                     "title": title,
@@ -235,92 +243,70 @@ class MTAlmtScraper(BaseScaper):
             url = f"{requests.compat.urljoin(self.base_url, norm_link)}/ficha-tecnica?exibirAnotacao=1"
 
         soup = self._get_soup(url)
+        if not soup:
+            # try again, MT website is really unstable
+            time.sleep(3)
+            soup = self._get_soup(url)
 
-        # <ul class="nav flex-column">
-        #     <li class="my-1">
-        #         <span class="fw-bold">Ementa:</span>
-        #         Cria o Município de Jauru, com sede na localidade do mesmo nome, por desmembramento do Município de Cáceres.
-        #     </li>
-        #     <li class="my-1">
-        #         <strong>Autor:</strong>
-        #                             Deputado Aldo Borges            </li>
-        #     <li class="my-1">
-        #         <strong>Publicação:</strong>
-        #         <ul>
-        #                                     <li>
-        #                         <a href="https://storage.al.mt.gov.br/api/v1/download/default/387704" download="download" target="_blank" rel="noopener">
-        #             <strong>
-        #         Promulgação de lei:
-        #     </strong>
-
-        # D.O.
-        # de
-        # 20/12/1979, edição nº
-        # 17980
-
-        #             ,
-
-        #             na página nº
-        #     3
-        #     </a>
-
-        #                 </li>
-        #                             </ul>
-        #     </li>
-        #     <li class="my-1">
-        #         <strong>Data de início da vigência:</strong>
-        #                             20 de dezembro de 1979
-        #                     </li>
-        #     <li class="my-1">
-        #         <strong>Data de fim da vigência:</strong>
-        #                     </li>
-        #     <li class="my-1">
-        #         <strong>Data da promulgação:</strong>
-        #                             20 de dezembro de 1979
-        #                     </li>
-        #     <li class="my-1">
-        #         <strong>Apelido:</strong>
-
-        #     </li>
-        #     <li class="my-1">
-        #         <strong>Assunto:</strong>
-        #                             Municípios            </li>
-        #     <li class="my-1">
-        #         <strong>Tags:</strong>
-        #                             Desmembramento,                    Município,                    Jauru,                    Cáceres,                    Lucialva,                    Figueirópolis,                    Criação de Município            </li>
-        #     <li class="my-1">
-        #         <strong>Situação:</strong>
-        #         Não consta revogação expressa
-        #     </li>
-        # </ul>
-
-        author = soup.find("strong", text="Autor:")
+        # autor or autores
+        author = soup.find("strong", text=re.compile(r"Autor:|Autores:"))
         if author:
-            author = author.find_next("li").text
+            author = author.find_parent("li").text
+            author = re.sub(r"Autor:|Autores:", "", author).strip()
 
         publication = soup.find("strong", text="Publicação:")
         if publication:
-            publication = publication.find_next("li").text
+            publication = (
+                publication.find_parent("li").text.replace("Publicação:", "").strip()
+            )
         date = soup.find("strong", text="Data da promulgação:")
         if date:
-            date = date.find_next("li").text
+            date = (
+                date.find_parent("li").text.replace("Data da promulgação:", "").strip()
+            )
 
-        subject = soup.find("strong", text="Assunto:")
+        subject_regex = re.compile(r"Assunto:|Assuntos:")
+        subject = soup.find("strong", text=subject_regex)
         if subject:
-            subject = subject.find_next("li").text
+            subject = subject.find_parent("li").text
+            subject = re.sub(subject_regex, "", subject).strip()
 
         tags = soup.find("strong", text="Tags:")
         if tags:
-            tags = tags.find_next("li").text
+            tags = tags.find_parent("li").text.replace("Tags:", "").strip()
         situation = soup.find("strong", text="Situação:")
         if situation:
-            situation = situation.find_next("li").text
+            situation = (
+                situation.find_parent("li").text.replace("Situação:", "").strip()
+            )
 
-        text_markdown = self._get_markdown(doc_info["document_url"])
+        pdf_content = self._make_request(
+            doc_info["document_url"]
+        )  # need to make a request to get pdf content first, using directly _get_markdown will not work
+        if not pdf_content:
+            print(f"Error getting pdf content for {doc_info['document_url']}")
+            return
+
+        text_markdown = self._get_markdown(response=pdf_content)
+
+        # text_markdown = self._get_markdown(doc_info["document_url"])
         # remove header with link at beginning of document
         # http://www.al.mt.gov.br/TNX/viewLegislacao.php?cod=44
 
-        text_markdown = self.header_remove_regex.sub("", text_markdown)
+        text_markdown = self.header_remove_regex.sub("", text_markdown).strip()
+
+        if "Powered by TCPDF".lower() in text_markdown.lower():
+            # probably pdf is an image
+
+            pdf_content = self._make_request(doc_info["document_url"]).content
+            if not pdf_content:
+                return
+
+            text_markdown = (
+                self._get_pdf_image_markdown(pdf_content)
+                .replace("Powered by TCPDF (www.tcpdf.org)", "")
+                .strip()
+            )
 
         if not text_markdown:
             return None
@@ -341,22 +327,27 @@ class MTAlmtScraper(BaseScaper):
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
 
-        all_types = {}
+        all_types = []
         for norm_type, norm_type_id in self.types.items():
-            all_types[norm_type] = {
-                "id": norm_type_id,
-                "is_historic": False,
-            }
+            all_types.append(
+                {
+                    "id": norm_type_id,
+                    "norm_type": norm_type,
+                    "is_historic": False,
+                }
+            )
 
         for norm_type, norm_type_id in self.historic_types.items():
-            all_types[norm_type] = {
-                "id": norm_type_id,
-                "is_historic": True,
-            }
+            all_types.append(
+                {
+                    "id": norm_type_id,
+                    "norm_type": norm_type,
+                    "is_historic": True,
+                }
+            )
 
-        # for norm_type, norm_type_id in tqdm(
-        for norm_type, norm_type_data in tqdm(
-            all_types.items(),
+        for norm_type_data in tqdm(
+            all_types,
             desc=f"MATO GROSSO | Year: {year} | Types",
             total=len(all_types),
             disable=not self.verbose,
@@ -371,6 +362,7 @@ class MTAlmtScraper(BaseScaper):
             if not self.token:
                 self._set_token()
 
+            norm_type = norm_type_data["norm_type"]
             norm_type_id = norm_type_data["id"]
             url = self._format_search_url(norm_type_id, year, 1, is_historic)
             soup = self._get_soup(url)
@@ -389,6 +381,7 @@ class MTAlmtScraper(BaseScaper):
                     executor.submit(
                         self._get_docs_links,
                         self._format_search_url(norm_type_id, year, page, is_historic),
+                        is_historic,
                     )
                     for page in range(1, pages + 1)
                 ]
@@ -421,7 +414,6 @@ class MTAlmtScraper(BaseScaper):
                     total=len(futures),
                     disable=not self.verbose,
                 ):
-
                     norm = future.result()
                     if not norm:
                         continue

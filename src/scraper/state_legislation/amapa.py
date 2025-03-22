@@ -17,7 +17,7 @@ TYPES = {
 
 VALID_SITUATIONS = [
     "Não consta"
-]  # Conama does not have a situation field, invalid norms will have an indication in the document text
+]  # Alap does not have a situation field, invalid norms will have an indication in the document text
 
 INVALID_SITUATIONS = []  # norms with these situations are invalid norms (no lon
 
@@ -82,19 +82,19 @@ class AmapaAlapScraper(BaseScaper):
             tds = item.find_all("td")
             if len(tds) != 6:
                 continue
-            
-        
 
             title = tds[0].text.strip()
             summary = tds[1].text.strip()
             doe_number = tds[2].text.strip()
             date = tds[3].text.strip()
             proposition_number = tds[4].text.strip()
-            
+
             try:
                 html_link = tds[5].find("a")["href"]
             except Exception as e:
-                print(f"Error getting html link: {e}") # some documents are not available, so we skip them
+                print(
+                    f"Error getting html link: {e}"
+                )  # some documents are not available, so we skip them
                 continue
 
             docs.append(
@@ -157,7 +157,7 @@ class AmapaAlapScraper(BaseScaper):
 
                 # total pages info is not available, so we need to check if the page is empty. In order to make parallel calls, we will assume an initial number of pages and increase if needed. We will know that all the pages were scraped when we request a page and it shows a error message
 
-                total_pages = self.max_workers
+                total_pages = 1  # just to start and avoid making a lot of requests for empty pages
                 self.reached_end_page = False
 
                 # Get documents html links
@@ -184,7 +184,7 @@ class AmapaAlapScraper(BaseScaper):
                                 documents.extend(docs)
 
                     start_page += total_pages
-                    total_pages += 10
+                    total_pages += self.max_workers
 
                     # Get document data
                     results = []
