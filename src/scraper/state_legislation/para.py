@@ -129,6 +129,7 @@ class ParaAlepaScraper(BaseScaper):
                 url = self._format_search_url(norm_type_id, year)
                 docs = self._get_docs_links(url, norm_type)
 
+                results = []
                 with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                     futures = [
                         executor.submit(self._get_doc_data, doc_info)
@@ -152,3 +153,14 @@ class ParaAlepaScraper(BaseScaper):
                             "type": norm_type,
                             **result,
                         }
+
+                        self.queue.put(queue_item)
+                        results.append(queue_item)
+
+                self.results.extend(results)
+                self.count += len(results)
+
+                if self.verbose:
+                    print(
+                        f"Finished scraping for Year: {year} | Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
+                    )
