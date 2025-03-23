@@ -1,3 +1,8 @@
+"""Main script to run all scrapers realted to Brazilian legislation.
+
+Note: I'm not using https://leisestaduais.com.br because it's explicitly forbidden to scrape their data, vide https://leisestaduais.com.br/robots.txt
+"""
+
 import os
 from openai import OpenAI
 from typing import List, Dict
@@ -19,6 +24,8 @@ from src.scraper.state_legislation import (
     MSAlemsScraper,
     MTAlmtScraper,
     MGAlmgScraper,
+    ParaAlepaScraper,
+    ParaibaAlpbScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -208,6 +215,25 @@ if __name__ == "__main__":
                     "max_workers": 32,
                 },
                 "name": "MGAlmg",
+                "run": False,
+            },
+            {
+                "scraper": ParaAlepaScraper,
+                "params": {
+                    "year_start": 1947,  # 1947 is the earliest year available
+                    "verbose": True,
+                    "max_workers": 32,
+                },
+                "name": "PAAlepa",
+                "run": False,
+            },
+            {
+                "scraper": ParaibaAlpbScraper,
+                "params": {
+                    # "year_start": 1947,  # 1947 is the earliest year available
+                    "verbose": True,
+                },
+                "name": "PBAlpb",
                 "run": True,
             },
             {

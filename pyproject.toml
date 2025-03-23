@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.12.3",
+    "datasets>=3.4.1",
     "markitdown>=0.0.1a3",
     "pip>=24.3.1",
     "pymupdf>=1.25.2",

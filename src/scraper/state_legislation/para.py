@@ -1,8 +1,6 @@
-import requests
+import re
 from bs4 import BeautifulSoup
-from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import requests.compat
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
 
@@ -59,6 +57,7 @@ class ParaAlepaScraper(BaseScaper):
             "button": "Buscar",
         }
         self.fetched_constitution = False
+        self.regex_total_count = re.compile(r"Total de Registros:\s+(\d+)")
         self._initialize_saver()
 
     def _format_search_url(self, norm_type_id: int, year: int) -> str:
@@ -71,29 +70,36 @@ class ParaAlepaScraper(BaseScaper):
         """Get documents html links from given page.
         Returns a list of dicts with keys 'title', 'summary', 'pdf_link'
         """
-        response = self._make_request(url)
+        response = self._make_request(url, method="POST", payload=self.params)
         soup = BeautifulSoup(response.content, "html.parser")
+
+        #   Total de Registros:                      0
+        # check if empty page
+        total_count = self.regex_total_count.search(soup.prettify())
+        if total_count is None or int(total_count.group(1)) == 0:
+            return []
 
         docs = []
 
-        # items will be in the second table of the page
-        table = soup.find_all("table")[1]
+        # items will be in the last table of the page
+        table = soup.find_all("table")[-1]
         items = table.find_all("tr")
 
         for item in items:
             tds = item.find_all("td")
-            title = tds[0].find("strong").text.next_sibling.strip()
-            pdf_link = tds[1].find("a")
-            summary = pdf_link.text.strip()
-            pdf_link = pdf_link["href"]
+            if len(tds) == 2:
+                title = tds[0].find("strong").next_sibling.strip()
+                pdf_link = tds[1].find("a")
+                summary = pdf_link.text.strip()
+                pdf_link = pdf_link["href"]
 
-            docs.append(
-                {
-                    "title": f"{norm_type} {title}",
-                    "summary": summary,
-                    "pdf_link": pdf_link,
-                }
-            )
+                docs.append(
+                    {
+                        "title": f"{norm_type} {title}",
+                        "summary": summary,
+                        "pdf_link": pdf_link,
+                    }
+                )
 
         return docs
 
@@ -103,14 +109,17 @@ class ParaAlepaScraper(BaseScaper):
         pdf_link = doc_info.pop("pdf_link")
         text_markdown = self._get_markdown(pdf_link)
 
-        if not text_markdown:
+        if not text_markdown or not text_markdown.strip():
             print(f"Error getting markdown from pdf: {pdf_link}")
             return None
 
         doc_info["text_markdown"] = text_markdown
         doc_info["document_url"] = pdf_link
         return doc_info
-
+    
+    def _scrape_constitution(self): 
+        """Scrape the constitution"""
+ 
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
         for situation in tqdm(

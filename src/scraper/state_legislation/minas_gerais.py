@@ -21,17 +21,18 @@ TYPES = {
     "Resolução": 15,
 }
 
-VALID_SITUATIONS = {
-    "Não consta revogação expressa": 1
-}  # Conama does not have a situation field, invalid norms will have an indication in the document text
 
-INVALID_SITUATIONS = {
-    "Revogada": 2,
-    "Inconstitucional": 3,
-}  # norms with these situations are invalid norms (no lon
+# OBS:  not using situation because it is not working properly, situation will be inferred from the document text
+
+VALID_SITUATIONS = [
+    "Não consta revogação expressa"
+]  # Almg does not have a situation field, invalid norms will have an indication in the document text
+
+INVALID_SITUATIONS = []
+# norms with these situations are invalid norms
 
 # the reason to have invalid situations is in case we need to train a classifier to predict if a norm is valid or something else similar
-SITUATIONS = VALID_SITUATIONS | INVALID_SITUATIONS
+SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
 
 
 class MGAlmgScraper(BaseScaper):
@@ -57,18 +58,14 @@ class MGAlmgScraper(BaseScaper):
             "grupo": "",
             "ordem": "0",
             "pesquisou": "true",
-            "dataInicio": "",
-            "sit": "",
+            "dataInicio": "",  # not using situation parameter because it is not working properly
         }
         self.reached_end_page = False
         self._initialize_saver()
 
-    def _format_search_url(
-        self, norm_type_id: str, situation_id: int, year: int, page: int
-    ) -> str:
+    def _format_search_url(self, norm_type_id: str, year: int, page: int) -> str:
         """Format url for search request"""
         self.params["grupo"] = norm_type_id
-        self.params["sit"] = situation_id
         self.params["ano"] = year
         self.params["pagina"] = page
         return f"{self.base_url}/atividade-parlamentar/leis/legislacao-mineira?{requests.compat.urlencode(self.params)}"
@@ -90,7 +87,7 @@ class MGAlmgScraper(BaseScaper):
         for item in items:
             title = item.find("a").text.strip()
             html_link = item.find("a")["href"]
-            summary = item.find("div").text.strip()
+            summary = item.find("div").next_sibling.text.strip()
             docs.append({"title": title, "summary": summary, "html_link": html_link})
 
         return docs
@@ -103,7 +100,19 @@ class MGAlmgScraper(BaseScaper):
 
         soup_data = self._get_soup(url)
 
-        origin = soup_data.find("span", text="Origem").next_sibling.text.strip()
+        origin = soup_data.find("span", text="Origem")
+        if origin:
+            origin = origin.next_sibling.text.strip()
+        else:  # may have multiple origens
+            origin = soup_data.find("span", text="Origens")
+            # <h2 class="d-none">PL&nbsp;PROJETO DE LEI&nbsp;1191/1964</h2>
+            h2s = origin.find_all_next("h2", class_="d-none")
+            origin = ", ".join([h2.text.strip() for h2 in h2s])
+
+        situation = soup_data.find("span", text="Situação")
+        if situation:
+            situation = situation.next_sibling.text.strip().capitalize()
+
         publication = soup_data.find("span", text="Fonte")
         if publication:
             publication = publication.find_next("div").text.strip()
@@ -154,6 +163,7 @@ class MGAlmgScraper(BaseScaper):
         return {
             **doc_info,
             "origin": origin,
+            "situation": situation,
             "publication": publication,
             "tags": tags,
             "subject": subject,
@@ -164,8 +174,8 @@ class MGAlmgScraper(BaseScaper):
 
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
-        for situation, situation_id in tqdm(
-            self.situations.items(),
+        for situation in tqdm(
+            self.situations,
             desc="MINAS GERAIS | Situations",
             total=len(self.situations),
             disable=not self.verbose,
@@ -191,9 +201,7 @@ class MGAlmgScraper(BaseScaper):
                         futures = [
                             executor.submit(
                                 self._get_docs_links,
-                                self._format_search_url(
-                                    norm_type_id, situation_id, year, page
-                                ),
+                                self._format_search_url(norm_type_id, year, page),
                             )
                             for page in range(start_page, total_pages + 1)
                         ]
@@ -228,10 +236,13 @@ class MGAlmgScraper(BaseScaper):
                         if result is None:
                             continue
 
+                        # situation will appear only in invalid norms
+                        if not result["situation"]:
+                            result["situation"] = situation
+
                         # save to one drive
                         queue_item = {
                             "year": year,
-                            "situation": situation,
                             "type": norm_type,
                             **result,
                         }

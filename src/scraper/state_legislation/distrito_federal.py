@@ -68,7 +68,7 @@ INVALID_SITUATIONS = {
 }  # norms with these situations are invalid norms (no longer have legal effect)
 
 # the reason to have invalid situations is in case we need to train a classifier to predict if a norm is valid or something else similar
-SITUATIONS = {**VALID_SITUATIONS, **INVALID_SITUATIONS}
+SITUATIONS = VALID_SITUATIONS | INVALID_SITUATIONS
 
 
 class DFSinjScraper(BaseScaper):
@@ -285,7 +285,7 @@ class DFSinjScraper(BaseScaper):
 
         return docs
 
-    def _get_doc_data(self, doc_info: dict) -> list:
+    def _get_doc_data(self, doc_info: dict) -> dict:
         """Get document data from html link"""
 
         try:
