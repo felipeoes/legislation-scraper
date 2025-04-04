@@ -1,8 +1,6 @@
 import requests
-import fitz
 import base64
 
-from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper

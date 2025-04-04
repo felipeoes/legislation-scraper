@@ -26,6 +26,7 @@ from src.scraper.state_legislation import (
     MGAlmgScraper,
     ParaAlepaScraper,
     ParaibaAlpbScraper,
+    ParanaCVScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
 )
@@ -36,6 +37,9 @@ load_dotenv()
 ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR = os.environ.get(
     "ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR"
 )
+
+OPENVPN_USERNAME = os.environ.get("OPENVPN_USERNAME")
+OPENVPN_PASSWORD = os.environ.get("OPENVPN_PASSWORD")
 
 if __name__ == "__main__":
     try:
@@ -78,9 +82,6 @@ if __name__ == "__main__":
                 "run": False,
             },
             {
-                # "scraper": AcreLegisScraper(
-                #     year_start=1800, verbose=True, max_workers=32
-                # ),
                 "scraper": AcreLegisScraper,
                 "params": {
                     "year_start": 1800,
@@ -230,10 +231,78 @@ if __name__ == "__main__":
             {
                 "scraper": ParaibaAlpbScraper,
                 "params": {
-                    # "year_start": 1947,  # 1947 is the earliest year available
+                    "year_start": 1924,  # 1924 is the earliest year available
+                    "llm_client": client,  # we have pdf image extraction
+                    "llm_model": model,
                     "verbose": True,
                 },
                 "name": "PBAlpb",
+                "run": False,
+            },
+            # OBS: using Selenium for PARANA SCRAPER because the website blocks the requests for a while after just a few requests. Selenium works fine
+            {
+                "scraper": ParanaCVScraper,
+                "params": {
+                    "year_start": 1968,  # 1854 is the earliest year available
+                    "verbose": True,
+                    "use_selenium": True,
+                    "use_openvpn": True,
+                    "config_files": [
+                        r"C:\Users\Docker\OpenVPN\config\us-free-2.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-3.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-4.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-5.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-6.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-7.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-16.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-23.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-35.protonvpn.udp.ovpn",
+                        r"C:\Users\Docker\OpenVPN\config\us-free-59.protonvpn.udp.ovpn",
+                    ],
+                    "openvpn_credentials_map": {
+                        "us-free-2.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-3.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-4.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-5.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-6.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-7.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-16.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-23.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-35.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                        "us-free-59.protonvpn.udp": (
+                            OPENVPN_USERNAME,
+                            OPENVPN_PASSWORD,
+                        ),
+                    },
+                },
+                "name": "PRCV",
                 "run": True,
             },
             {

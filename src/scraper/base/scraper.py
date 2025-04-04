@@ -1,7 +1,10 @@
+import os
 import requests
 import time
 import fitz
+import psutil
 
+from typing import Union
 from PIL import Image
 from openai import OpenAI
 from io import BytesIO
@@ -10,6 +13,8 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
+
+
 from markitdown import MarkItDown, UnsupportedFormatException, FileConversionException
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
@@ -17,10 +22,13 @@ from multiprocessing import Queue
 from pathlib import Path
 from dotenv import load_dotenv
 from src.database.saver import OneDriveSaver
+from src.utils.openvpn import OpenVPNManager
 
 load_dotenv()
 
 YEAR_START = 1808  # CHECK IF NECESSARY LATER
+DEFAULT_VALID_SITUATION = "Não consta revogação expressa"
+DEFAULT_INVALID_SITUATION = "Revogada"
 
 ONEDRIVE_STATE_LEGISLATION_SAVE_DIR = (
     rf"{environ.get('ONEDRIVE_STATE_LEGISLATION_SAVE_DIR')}"
@@ -43,6 +51,10 @@ class BaseScaper:
         llm_prompt: str = "Extraia todo  o conteúdo da imagem. Retorne somente o conteúdo extraído",
         use_selenium: bool = False,
         use_requests_session: bool = False,
+        use_openvpn: bool = False,
+        config_files: list = None,
+        openvpn_credentials_map: dict = None,
+        proxies: dict = None,
         max_workers: int = 16,
         verbose: bool = False,
     ):
@@ -57,7 +69,11 @@ class BaseScaper:
         self.llm_prompt = llm_prompt
         self.use_selenium = use_selenium
         self.use_requests_session = use_requests_session
+        self.use_openvpn = use_openvpn
+        self.config_files = config_files
+        self.openvpn_credentials_map = openvpn_credentials_map
         self.verbose = verbose
+        self.proxies = proxies
         self.max_workers = max_workers
         self.years = list(range(self.year_start, self.year_end + 1))
         self.headers = {
@@ -74,8 +90,10 @@ class BaseScaper:
         self.session: requests.Session = None
         self.driver: Chrome = None
         self.saver: OneDriveSaver = None
+        self.openvpn_manager: OpenVPNManager = None
         self.initialize_selenium()
         self.initialize_requests_session()
+        self.initialize_openvpn_manager()
 
     def initialize_requests_session(self):
         """Initialize requests session"""
@@ -98,21 +116,29 @@ class BaseScaper:
         """Initialize saver class. The child class should call this method in its __init__ method, after setting the docs_save_dir attribute."""
         self.saver = OneDriveSaver(self.queue, self.error_queue, self.docs_save_dir)
 
+    def initialize_openvpn_manager(self):
+        """Initialize openvpn manager"""
+        if self.use_openvpn:
+            self.openvpn_manager = OpenVPNManager(
+                config_files=self.config_files,
+                credentials_map=self.openvpn_credentials_map,
+            )
+
     def _get_request(self, url: str, **kwargs) -> requests.Response:
         """Get request from given url"""
         if self.use_requests_session:
-            response = self.session.get(url, **kwargs)
+            response = self.session.get(url, proxies=self.proxies, **kwargs)
         else:
-            response = requests.get(url, **kwargs)
+            response = requests.get(url, proxies=self.proxies, **kwargs)
 
         return response
 
     def _post_request(self, url: str, json: dict, **kwargs) -> requests.Response:
         """Post request to given url"""
         if self.use_requests_session:
-            response = self.session.post(url, json=json, **kwargs)
+            response = self.session.post(url, json=json, proxies=self.proxies, **kwargs)
         else:
-            response = requests.post(url, json=json, **kwargs)
+            response = requests.post(url, json=json, proxies=self.proxies, **kwargs)
 
         return response
 
@@ -166,19 +192,46 @@ class BaseScaper:
 
         return None
 
-    def _get_soup(self, url: str) -> BeautifulSoup:
-        """Get BeautifulSoup object from given url"""
-        response = self._make_request(url)
+    def _change_vpn_connection(self):
+        """Change VPN connection. Currently the supported VPN is ProtonVPN and the way to reconnect is by killing the process and starting it again."""
+        if not self.use_openvpn:
+            print("OpenVPN is not enabled, skipping VPN connection change")
+            return
 
-        if response is None:
+        if self.openvpn_manager is None:
+            print("OpenVPN manager is not initialized, skipping VPN connection change")
+            return
+
+        self.openvpn_manager.change_vpn_connection()
+
+    def _get_soup(self, url: Union[str, requests.Response]) -> BeautifulSoup:
+        """Get BeautifulSoup object from given url"""
+
+        if isinstance(url, requests.Response):
+            return BeautifulSoup(url.content, "html.parser")
+
+        res = self._make_request(url)
+
+        if res is None:
             return None
 
-        return BeautifulSoup(response.content, "html.parser")
+        return BeautifulSoup(res.content, "html.parser")
 
     def _selenium_get_soup(self, url: str) -> BeautifulSoup:
         """Get BeautifulSoup object from given url using selenium"""
-        self.driver.get(url)
-        time.sleep(1)
+        retries = 3
+        while retries > 0:
+            try:
+                self.driver.get(url)
+                if self.use_openvpn:
+                    self._handle_blocked_access()
+
+                time.sleep(1)
+                break
+            except Exception as e:
+                print(f"Error: {e}")
+                retries -= 1
+
         return BeautifulSoup(self.driver.page_source, "html.parser")
 
     def _pdf_to_images(self, doc: fitz.Document) -> list:
@@ -241,19 +294,6 @@ class BaseScaper:
                 md_content = future.result()
                 text_markdown_img += md_content + "\n\n"
 
-        # # Sequential processing
-        # for img in tqdm(
-        #     images,
-        #     desc="Converting images to markdown",
-        #     total=len(images),
-        #     disable=not self.verbose,
-        # ):
-        #     buffer = BytesIO()
-        #     img.save(buffer, format="PNG")
-        #     img = BytesIO(buffer.getvalue())
-        #     md_content = self._get_markdown(stream=img)
-        #     text_markdown_img += md_content + "\n\n"
-
         if not text_markdown_img:
             print("No images found in pdf")
 
@@ -307,6 +347,9 @@ class BaseScaper:
             retries -= 1
 
         return md_content
+
+    def _handle_blocked_access(self, *args, **kwargs):
+        pass
 
     def _format_search_url(self, *args, **kwargs):
         pass

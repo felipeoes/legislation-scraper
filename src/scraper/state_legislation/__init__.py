@@ -13,5 +13,6 @@ from .mato_grosso import MTAlmtScraper
 from .minas_gerais import MGAlmgScraper
 from .para import ParaAlepaScraper
 from .paraiba import ParaibaAlpbScraper
+from .parana import ParanaCVScraper
 from .sao_paulo import SaoPauloAlespScraper
 from .rio_de_janeiro import RJAlerjScraper

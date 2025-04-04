@@ -2,12 +2,7 @@ import time
 import re
 import requests
 from bs4 import BeautifulSoup
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
 

@@ -1,4 +1,3 @@
-from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
@@ -29,18 +28,20 @@ INVALID_SITUATIONS = (
 
 SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
 
-SUBJECTS = {
-    50: "Administração Pública do Estado da Paraíba",
-    19: "Agropecuária",
-    66: "Câmaras Municipais do Estado da Paraíba",
-    157: "Certificado de Congratulações",
-    113: "Certificado de Excelência Ecológica",
-    101: "Certificado de Qualidade em Serviço Público Municipal",
-    153: "Certificado de Reconhecimento de Atividade de Relevante Interesse Ambiental",
-    117: "Certificado de Responsabilidade Social",
-    55: "Cidadania",
-    76: "Cidadão Paraibano",
-}
+
+# SUBJECTS = {
+#     1: "Não classificada",
+#     50: "Administração Pública do Estado da Paraíba",
+#     19: "Agropecuária",
+#     66: "Câmaras Municipais do Estado da Paraíba",
+#     157: "Certificado de Congratulações",
+#     113: "Certificado de Excelência Ecológica",
+#     101: "Certificado de Qualidade em Serviço Público Municipal",
+#     153: "Certificado de Reconhecimento de Atividade de Relevante Interesse Ambiental",
+#     117: "Certificado de Responsabilidade Social",
+#     55: "Cidadania",
+#     76: "Cidadão Paraibano",
+# }
 
 
 class ParaibaAlpbScraper(BaseScaper):
@@ -61,13 +62,15 @@ class ParaibaAlpbScraper(BaseScaper):
         **kwargs,
     ):
         super().__init__(base_url, types=TYPES, situations=SITUATIONS, **kwargs)
-        self.subjects = SUBJECTS
         self.docs_save_dir = self.docs_save_dir / "PARAIBA"
         self.params = {
             "tipo": "",
             "ano": "",
             "page": 1,
         }
+        # https://sapl3.al.pb.leg.br/api/norma/assuntonorma/
+        # subjects are fetched at running time from the above link
+        self.subjects = {}
         self._initialize_saver()
 
     def _format_search_url(
@@ -121,11 +124,15 @@ class ParaibaAlpbScraper(BaseScaper):
 
         situation = "Não consta revogação expressa"  # default valid situation
         for item in items:
+            
+            if item['texto_integral'] is None: # no link norm text, skip it
+                continue
 
             # infer situation from data_vigencia
             if item["data_vigencia"] is not None:
                 situation = "Revogada"  # just to know the norm is invalid
-
+        
+            
             doc = {
                 "id": item["id"],
                 "norm_number": item["numero"],
@@ -134,7 +141,9 @@ class ParaibaAlpbScraper(BaseScaper):
                 "summary": item["ementa"],
                 "subject": [self.subjects[subject] for subject in item["assuntos"]],
                 "date": item["data"],
-                "origin": item["esfera_federacao"],
+                "origin": item[
+                    "esfera_federacao"
+                ],  # E for Executivo, L for Legislativo, J for Judiciário
                 "publication": item["veiculo_publicacao"],
                 "pdf_link": item["texto_integral"],
             }
@@ -142,13 +151,27 @@ class ParaibaAlpbScraper(BaseScaper):
 
         return docs
 
-    def _get_doc_data(self, doc_info: dict) -> dict:
+    def _get_doc_data(self, doc_info: dict, year: int) -> dict:
         """Get document data"""
         # remove pdf_link from doc_info
         pdf_link = doc_info.pop("pdf_link")
 
-        text_markdown = self._get_markdown(pdf_link)
-        if not text_markdown:
+        response = self._make_request(pdf_link)
+        if not response.content: # invalid pdf
+            return None
+        # if year is until 1990, the default method for getting text markdown will be image pdf
+        if year <= 1990:
+            text_markdown = self._get_pdf_image_markdown(response.content)
+        else:
+            text_markdown = self._get_markdown(response=response)
+
+            if not text_markdown:
+                # probably an image pdf, even after 1990
+                text_markdown = self._get_pdf_image_markdown(response.content)
+
+        if (
+            not text_markdown or not text_markdown.strip()
+        ):  # indeed an invalid or unavailable pdf
             return None
 
         doc_info["text_markdown"] = text_markdown
@@ -158,6 +181,30 @@ class ParaibaAlpbScraper(BaseScaper):
 
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
+
+        # check if subjects have been fetched
+        if not self.subjects:
+            subjects_url = f"{self.base_url}/api/norma/assuntonorma/"
+            response = self._make_request(subjects_url)
+            data = response.json()
+            total_pages = data["pagination"]["total_pages"]
+
+            subjects = {item["id"]: item["assunto"] for item in data["results"]}
+
+            for page in tqdm(
+                range(2, total_pages + 1),
+                desc="PARAIBA | Fetching subjects",
+                total=total_pages,
+                disable=not self.verbose,
+            ):
+                response = self._make_request(f"{subjects_url}?page={page}")
+                data = response.json()
+                subjects.update(
+                    {item["id"]: item["assunto"] for item in data["results"]}
+                )
+
+            self.subjects = subjects
+
         for norm_type, norm_type_id in tqdm(
             self.types.items(),
             desc=f"PARAIBA | Year: {year} | Types",
@@ -169,9 +216,15 @@ class ParaibaAlpbScraper(BaseScaper):
 
             # get total number of pages
             response = self._make_request(url)
-            if response.status_code == 400: # no norms for this year
+            if response.status_code == 400:  # no norms for this year
                 continue
-            total_pages = response.json()["total_pages"]
+
+            data = response.json()
+
+            if len(data["results"]) == 0:
+                continue
+
+            total_pages = data["pagination"]["total_pages"]
 
             documents = []
 
@@ -199,7 +252,7 @@ class ParaibaAlpbScraper(BaseScaper):
             # get all norm data
             with ThreadPoolExecutor() as executor:
                 futures = [
-                    executor.submit(self._get_doc_data, doc_info)
+                    executor.submit(self._get_doc_data, doc_info, year)
                     for doc_info in documents
                 ]
 
@@ -210,6 +263,9 @@ class ParaibaAlpbScraper(BaseScaper):
                     disable=not self.verbose,
                 ):
                     result = future.result()
+                    
+                    if result is None:
+                        continue
 
                     # save to one drive
                     queue_item = {

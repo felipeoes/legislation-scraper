@@ -166,3 +166,4 @@ csv-datasets/*
 .vscode
 logs/*
 *.ipynb
+test.py

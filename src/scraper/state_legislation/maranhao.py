@@ -3,7 +3,6 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -124,7 +123,6 @@ class MaranhaoAlemaScraper(BaseScaper):
 
     def _selenium_click_page(self, page: int):
         """Click on page number with selenium"""
-        # <span class="ui-paginator-pages"><a class="ui-paginator-page ui-state-default ui-corner-all ui-state-active" aria-label="Page 1" tabindex="0" href="#">1</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 2" tabindex="0" href="#">2</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 3" tabindex="0" href="#">3</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 4" tabindex="0" href="#">4</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 5" tabindex="0" href="#">5</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 6" tabindex="0" href="#">6</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 7" tabindex="0" href="#">7</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 8" tabindex="0" href="#">8</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 9" tabindex="0" href="#">9</a><a class="ui-paginator-page ui-state-default ui-corner-all" aria-label="Page 10" tabindex="0" href="#">10</a></span>
 
         # check if page number is available to click
         current_visible_pages = self.driver.find_elements(
@@ -282,21 +280,6 @@ class MaranhaoAlemaScraper(BaseScaper):
         soup = self._selenium_search_norms(
             norm_type, norm_type_id, year, 0, subtype, subtype_id
         )
-
-        # # first make get request to get the view state
-        # soup = self._selenium_get_soup(url)
-        # viewstate = soup.find("input", {"name": "javax.faces.ViewState"})
-        # viewstate_value = viewstate["value"]
-        # self.params["javax.faces.ViewState"] = viewstate_value
-
-        # response = self._selenium_post_request(url, self.params)
-
-        # # response = self._make_request(url, method="POST", payload=self.params)
-        # soup = BeautifulSoup(response.content, "html.parser")
-
-        # <div class="ui-datatable-header ui-widget-header ui-corner-top">
-        # 			            		Consulta de Documentos Eletrônicos - 200 registro(s) encontrado(s)
-        # 			        		</div>
 
         # get total pages
         total_docs = soup.find(
