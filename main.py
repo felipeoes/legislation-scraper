@@ -243,7 +243,7 @@ if __name__ == "__main__":
             {
                 "scraper": ParanaCVScraper,
                 "params": {
-                    "year_start": 1968,  # 1854 is the earliest year available
+                    "year_start": 1988,  # 1854 is the earliest year available
                     "verbose": True,
                     "use_selenium": True,
                     "use_openvpn": True,
@@ -303,12 +303,6 @@ if __name__ == "__main__":
                     },
                 },
                 "name": "PRCV",
-                "run": True,
-            },
-            {
-                "scraper": SaoPauloAlespScraper,
-                "params": {},
-                "name": "SPAlesp",
                 "run": False,
             },
             {
@@ -319,6 +313,12 @@ if __name__ == "__main__":
                     "max_workers": 32,
                 },
                 "name": "RJAlerj",
+                "run": True,
+            },
+            {
+                "scraper": SaoPauloAlespScraper,
+                "params": {},
+                "name": "SPAlesp",
                 "run": False,
             },
         ]

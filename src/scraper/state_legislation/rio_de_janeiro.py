@@ -1,6 +1,9 @@
 import requests
 import re
+import base64
+import urllib.parse
 
+from io import BytesIO
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -9,15 +12,13 @@ from src.scraper.base.scraper import BaseScaper
 
 load_dotenv()
 
-# http://alerjln1.alerj.rj.gov.br/contlei.nsf/DecretoAnoInt?OpenForm&Start=1&Count=300
 # obs: LeiComp = Lei Complementar; LeiOrd = Lei Ordinária;
-TYPES = ["Decreto", "Emenda", "LeiComp", "LeiOrd", "Resolucao"]
+TYPES = ["Constituição Estadual", "Decreto", "Emenda", "LeiComp", "LeiOrd", "Resolucao"]
 
-VALID_SITUATIONS = ["Sem revogação expressa"]
-
-INVALID_SITUATIONS = (
-    []
-)  # norms with these situations are invalid norms (no longer have legal effect)
+# situations will be inferred from the text of the norm
+VALID_SITUATIONS = []
+INVALID_SITUATIONS = []
+# norms with these situations are invalid norms (no longer have legal effect)
 
 # the reason to have invalid situations is in case we need to train a classifier to predict if a norm is valid or something else similar
 SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
@@ -36,11 +37,6 @@ class RJAlerjScraper(BaseScaper):
         self,
         base_url: str = "http://alerjln1.alerj.rj.gov.br/contlei.nsf",
         **kwargs,
-        # year_start: int = YEAR_START,
-        # year_end: int = datetime.now().year,
-        # docs_save_dir: str = Path(ONEDRIVE_STATE_LEGISLATION_SAVE_DIR)
-        # / "RIO_DE_JANEIRO",
-        # verbose: bool = False,
     ):
         super().__init__(base_url, types=TYPES, situations=SITUATIONS, **kwargs)
         self.params = {
@@ -49,6 +45,7 @@ class RJAlerjScraper(BaseScaper):
             "Count": 500,
         }
         self.docs_save_dir = self.docs_save_dir / "RIO_DE_JANEIRO"
+        self.fetched_constitution = False
         self._initialize_saver()
 
     def _format_search_url(self, norm_type: str) -> str:
@@ -91,10 +88,6 @@ class RJAlerjScraper(BaseScaper):
         doc_html_link = doc_info["html_link"]
         soup = self._get_soup(doc_html_link)
 
-        # check if <font > some text [ Revogado ] some text</font> exists and skip if it does
-        if soup.find("font", text=re.compile(r"\s*\[ Revogado \]\s*")):
-            return None
-
         # get all html content in body until reach <a name="_Section2"></a>
         body = soup.body
         if body is None:
@@ -121,14 +114,20 @@ class RJAlerjScraper(BaseScaper):
             if not s.decomposed and hasattr(s, "decompose"):
                 s.decompose()
 
-        html_string = body.prettify(formatter="html")
+        # check if <font > some text [ Revogado ] some text</font> exists
+        if soup.find("font", text=re.compile(r"\s*\[ Revogado \]\s*")):
+            situation = "Revogada"
+        else:
+            situation = "Sem revogação expressa"
+
+        html_string = body.prettify()
 
         # get text markdown
         text_markdown = self._get_markdown(doc_html_link)
 
         return {
             **doc_info,
-            "situation": "situation",
+            "situation": situation,
             "html_string": html_string,
             "text_markdown": text_markdown,
             "document_url": doc_html_link.strip().replace(
@@ -136,17 +135,114 @@ class RJAlerjScraper(BaseScaper):
             ),  # need to remove just for alerj
         }
 
+    def scrape_constitution(self):
+        """Scrape constitution data"""
+        # url already base64 encoded that will return all constitution sections. Don't need to click "next" button to gather all sections
+        url = "http://www3.alerj.rj.gov.br/lotus_notes/default.asp?id=73&url=L2NvbnN0ZXN0Lm5zZi9JbmRpY2VJbnQ/T3BlbkZvcm0mU3RhcnQ9MSZDb3VudD0zMDA="
+        soup = self._get_soup(url)
+
+        # get all a tags with data-role (and any text), they will contain the links
+        a_links = soup.find_all("a", attrs={"data-role": True})
+
+        # remove the ones that have "Indice" or "OpenNavigator" in data-role; also remove the link who has the text "Emendas Constitucionais", since we're already scraping it later
+        a_links = [
+            a
+            for a in a_links
+            if "Indice" not in a["data-role"]
+            and "OpenNavigator" not in a["data-role"]
+            and "EMENDAS CONSTITUCIONAIS" not in a.text.strip().upper()
+        ]
+
+        html_string = ""
+
+        for index, a_link in tqdm(
+            enumerate(a_links), desc="RJ - ALERJ | Constitution", total=len(a_links)
+        ):
+            original_path = a_link["data-role"]
+            path_bytes = original_path.encode("utf-8")
+            encoded_path_bytes = base64.b64encode(path_bytes)
+            encoded_path_str = encoded_path_bytes.decode("ascii")
+
+            query_params = {"id": 73, "url": encoded_path_str}
+            section_url = f"http://www3.alerj.rj.gov.br/lotus_notes/default.asp?{urllib.parse.urlencode(query_params)}"
+            section_soup = self._get_soup(section_url)
+
+            # Clean the fetched content
+            for div_to_remove in section_soup.find_all(
+                "div", class_="alert alert-warning"
+            ):
+                div_to_remove.decompose()
+            for div_to_remove in section_soup.find_all("div", id="barraBotoes"):
+                div_to_remove.decompose()
+
+            # remove tags containing "Texto do Título", "Texto do Capítulo", "Ttexto da Seção"
+            for tag_to_remove in section_soup.find_all(
+                text=re.compile(r"Texto do Título|Texto do Capítulo|Texto da Seção")
+            ):
+                parent = tag_to_remove.parent
+                if parent and not parent.decomposed:
+                    parent.decompose()
+
+            # remove images
+            for img_to_remove in section_soup.find_all("img"):
+                img_to_remove.decompose()
+
+            content_div = section_soup.find("div", id="divConteudo")
+
+            # Get the inner HTML content, prettify adds formatting
+            html_content = content_div.prettify()
+            html_content = html_content.replace("\n", "")
+
+            if index != len(a_links) - 1:
+                html_content = html_content + "<hr/>"  # separator for chapters
+
+            html_string += html_content
+
+        # Convert HTML to Markdown
+        # add <html><body> tags to the html string to avoid error with markdown conversion
+        html_string = "<html><body>" + html_string + "</body></html>"
+
+        buffer = BytesIO()
+        buffer.write(html_string.encode())
+        buffer.seek(0)
+        text_markdown = self._get_markdown(stream=buffer).strip()
+
+        # save to one drive
+        queue_item = {
+            "year": 1989,
+            "type": "Constituição Estadual",
+            "title": "Constituição Estadual do Rio de Janeiro",
+            "date": "05/10/1989",
+            "author": "",
+            "summary": "",
+            "html_link": url,
+            "html_string": html_string,
+            "text_markdown": text_markdown,
+            "situation": "Sem revogação expressa",
+            "document_url": url,
+        }
+
+        self.queue.put(queue_item)
+        self.results.append(queue_item)
+        self.count += 1
+
+        self.fetched_constitution = True
+
     def _scrape_year(self, year: str):
         """Scrape data from given year"""
         # get data from all types
         for norm_type in tqdm(
             self.types, desc=f"RJ - ALERJ | {year} | Types", total=len(self.types)
         ):
+
+            if not self.fetched_constitution and norm_type == "Constituição Estadual":
+                self.scrape_constitution()
+                continue
+
             url = self._format_search_url(norm_type)
             soup = self._get_soup(url)
 
             # check if there are any results for the year
-            #  <tr valign="top"><td><a name="1"></a><a href="/contlei.nsf/LeiOrdAnoInt?OpenForm&amp;Start=1&amp;Count=500&amp;Expand=1" target="_self"><img src="/icons/expand.gif" border="0" height="16" width="16" alt="Show details for 2024"></a></td><td><b><font size="1" face="Verdana">2024</font></b></td></tr>
             if soup.find("tr", valign="top") is None:
                 continue
 
@@ -187,8 +283,6 @@ class RJAlerjScraper(BaseScaper):
                     # save to one drive
                     queue_item = {
                         "year": year,
-                        # website only shows documents without any revocation
-                        "situation": "Sem revogação expressa",
                         "type": norm_type,
                         **result,
                     }
