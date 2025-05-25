@@ -29,6 +29,8 @@ from src.scraper.state_legislation import (
     ParanaCVScraper,
     SaoPauloAlespScraper,
     RJAlerjScraper,
+    RNAlrnScraper,
+    RSAlrsScraper,
 )
 from dotenv import load_dotenv
 
@@ -243,64 +245,69 @@ if __name__ == "__main__":
             {
                 "scraper": ParanaCVScraper,
                 "params": {
-                    "year_start": 1988,  # 1854 is the earliest year available
+                    "year_start": 2024,  # 1854 is the earliest year available
                     "verbose": True,
                     "use_selenium": True,
-                    "use_openvpn": True,
-                    "config_files": [
-                        r"C:\Users\Docker\OpenVPN\config\us-free-2.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-3.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-4.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-5.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-6.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-7.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-16.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-23.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-35.protonvpn.udp.ovpn",
-                        r"C:\Users\Docker\OpenVPN\config\us-free-59.protonvpn.udp.ovpn",
-                    ],
-                    "openvpn_credentials_map": {
-                        "us-free-2.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-3.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-4.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-5.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-6.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-7.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-16.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-23.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-35.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                        "us-free-59.protonvpn.udp": (
-                            OPENVPN_USERNAME,
-                            OPENVPN_PASSWORD,
-                        ),
-                    },
+                    "use_selenium_vpn": True,
+                    "multiple_drivers": True,
+                    "vpn_extension_path": r"src\extensions\vee_vpn\veevpn_3_4_3_0.crx",
+                    "vpn_extension_page": "chrome-extension://majdfhpaihoncoakbjgbdhglocklcgno/src/popup/popup.html",
+                    # "max_workers": 20,
+                    # "use_openvpn": True,
+                    # "config_files": [
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-2.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-3.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-4.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-5.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-6.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-7.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-16.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-23.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-35.protonvpn.udp.ovpn",
+                    #     r"C:\Users\Docker\OpenVPN\config\us-free-59.protonvpn.udp.ovpn",
+                    # ],
+                    # "openvpn_credentials_map": {
+                    #     "us-free-2.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-3.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-4.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-5.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-6.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-7.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-16.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-23.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-35.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    #     "us-free-59.protonvpn.udp": (
+                    #         OPENVPN_USERNAME,
+                    #         OPENVPN_PASSWORD,
+                    #     ),
+                    # },
                 },
                 "name": "PRCV",
                 "run": False,
@@ -313,6 +320,26 @@ if __name__ == "__main__":
                     "max_workers": 32,
                 },
                 "name": "RJAlerj",
+                "run": False,
+            },
+            {
+                "scraper": RNAlrnScraper,
+                "params": {
+                    "llm_client": client,  # we have pdf image extraction
+                    "llm_model": model,
+                    "verbose": True,
+                },
+                "name": "RNAlrn",
+                "run": False,
+            },
+            {
+                "scraper": RSAlrsScraper,
+                "params": {
+                    "year_start": 1830,  # 1830 is the earliest year available
+                    "verbose": True,
+                    "max_workers": 32,
+                },
+                "name": "RNAlrn",
                 "run": True,
             },
             {

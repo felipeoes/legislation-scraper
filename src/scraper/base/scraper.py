@@ -14,7 +14,6 @@ from bs4 import BeautifulSoup
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 
-
 from markitdown import MarkItDown, UnsupportedFormatException, FileConversionException
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
@@ -35,6 +34,28 @@ ONEDRIVE_STATE_LEGISLATION_SAVE_DIR = (
 )
 
 
+# retry decorator with exponential backoff
+def retry(max_retries: int, base_delay: int = 3):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    print(
+                        f"Error: {e}. Retrying in {base_delay * (2 ** retries)} seconds..."
+                    )
+                    time.sleep(base_delay * (2**retries))
+                    retries += 1
+
+                    if retries == max_retries:
+                        raise e
+
+        return wrapper
+    return decorator
+
+
 class BaseScaper:
     """Base class for state legislation scrapers"""
 
@@ -50,6 +71,10 @@ class BaseScaper:
         llm_model: str = None,
         llm_prompt: str = "Extraia todo  o conteúdo da imagem. Retorne somente o conteúdo extraído",
         use_selenium: bool = False,
+        multiple_drivers: bool = False,
+        use_selenium_vpn: bool = False,
+        vpn_extension_path: str = None,
+        vpn_extension_page: str = None,
         use_requests_session: bool = False,
         use_openvpn: bool = False,
         config_files: list = None,
@@ -68,8 +93,12 @@ class BaseScaper:
         self.llm_model = llm_model
         self.llm_prompt = llm_prompt
         self.use_selenium = use_selenium
+        self.multiple_drivers = multiple_drivers
         self.use_requests_session = use_requests_session
         self.use_openvpn = use_openvpn
+        self.use_selenium_vpn = use_selenium_vpn
+        self.vpn_extension_path = vpn_extension_path
+        self.vpn_extension_page = vpn_extension_page
         self.config_files = config_files
         self.openvpn_credentials_map = openvpn_credentials_map
         self.verbose = verbose
@@ -89,6 +118,7 @@ class BaseScaper:
         self.soup = None
         self.session: requests.Session = None
         self.driver: Chrome = None
+        self.drivers: list[Chrome] = []
         self.saver: OneDriveSaver = None
         self.openvpn_manager: OpenVPNManager = None
         self.initialize_selenium()
@@ -103,14 +133,42 @@ class BaseScaper:
 
     def initialize_selenium(self):
         """Initialize selenium driver"""
-        if self.use_selenium:
-            options = Options()
+        options = Options()
+
+        if self.use_selenium and self.use_selenium_vpn and self.vpn_extension_path:
+            # load the extension
+            extension_abs_path = os.path.abspath(self.vpn_extension_path)
+            options.add_extension(extension_abs_path)
+            print(f"Attempting to load packed extension from: {extension_abs_path}")
+
+        if self.use_selenium and not self.multiple_drivers:
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
             options.add_argument("--disable-gpu")
-            options.add_argument("--disable-extensions")
             options.add_argument("--enable-javascript")
             self.driver = Chrome(options=options)
+
+        elif self.multiple_drivers:
+            # create a new instance of the Chrome driver for each worker
+            for driver_id, _ in enumerate(range(self.max_workers)):
+                driver = Chrome(options=options)
+                driver.id = driver_id
+                driver.available = True
+                self.drivers.append(driver)
+                print(f"Driver {driver.id} initialized")
+
+    def _get_available_driver(self):
+        """Get available driver from the list of drivers"""
+        while True:
+            for driver in self.drivers:
+                if driver.available:
+                    driver.available = False
+                    return driver
+            time.sleep(1)  # wait for a driver to become available
+
+    def _release_driver(self, driver: Chrome):
+        """Release driver back to the pool"""
+        driver.available = True
 
     def _initialize_saver(self):
         """Initialize saver class. The child class should call this method in its __init__ method, after setting the docs_save_dir attribute."""
@@ -217,12 +275,15 @@ class BaseScaper:
 
         return BeautifulSoup(res.content, "html.parser")
 
-    def _selenium_get_soup(self, url: str) -> BeautifulSoup:
+    def _selenium_get_soup(self, url: str, driver: Chrome = None) -> BeautifulSoup:
         """Get BeautifulSoup object from given url using selenium"""
         retries = 3
         while retries > 0:
             try:
-                self.driver.get(url)
+                if driver:
+                    driver.get(url)
+                else:
+                    self.driver.get(url)
                 if self.use_openvpn:
                     self._handle_blocked_access()
 
@@ -231,6 +292,9 @@ class BaseScaper:
             except Exception as e:
                 print(f"Error: {e}")
                 retries -= 1
+
+        if driver:
+            return BeautifulSoup(driver.page_source, "html.parser")
 
         return BeautifulSoup(self.driver.page_source, "html.parser")
 

@@ -106,13 +106,13 @@ class RJAlerjScraper(BaseScaper):
             if start and not desc.decomposed and hasattr(desc, "decompose"):
                 desc.decompose()
 
-        # Remove all <s> tags, which are not valid articles or paragraphs in the norm
-        for s in body.find_all("s"):
-            if not s:
-                continue
+        # remove images
+        for img_to_remove in body.find_all("img"):
+            img_to_remove.decompose()
 
-            if not s.decomposed and hasattr(s, "decompose"):
-                s.decompose()
+        # removel inks from a tags, but keep the text
+        for a_tag in body.find_all("a"):
+            a_tag.unwrap()
 
         # check if <font > some text [ Revogado ] some text</font> exists
         if soup.find("font", text=re.compile(r"\s*\[ Revogado \]\s*")):
@@ -120,10 +120,17 @@ class RJAlerjScraper(BaseScaper):
         else:
             situation = "Sem revogação expressa"
 
-        html_string = body.prettify()
+        html_string = body.prettify().replace("\n", "")
 
         # get text markdown
-        text_markdown = self._get_markdown(doc_html_link)
+        # add <html><body> tags to the html string to avoid error with markdown conversion
+        html_string = "<html>" + html_string + "</html>"
+
+        buffer = BytesIO()
+        buffer.write(html_string.encode())
+        buffer.seek(0)
+
+        text_markdown = self._get_markdown(stream=buffer)
 
         return {
             **doc_info,
