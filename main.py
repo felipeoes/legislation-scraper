@@ -5,8 +5,7 @@ Note: I'm not using https://leisestaduais.com.br because it's explicitly forbidd
 
 import os
 from openai import OpenAI
-from typing import List, Dict
-from src.scraper.base.scraper import BaseScaper
+from typing import List, Dict, Any
 from src.scraper.federal_legislation.scrape import CamaraDepScraper
 from src.scraper.conama.scrape import ConamaScraper
 from src.scraper.icmbio.scrape import ICMBioScraper
@@ -44,6 +43,10 @@ OPENVPN_USERNAME = os.environ.get("OPENVPN_USERNAME")
 OPENVPN_PASSWORD = os.environ.get("OPENVPN_PASSWORD")
 
 if __name__ == "__main__":
+    running_scrapers = (
+        []
+    )  # Initialize outside try block to ensure it's always available
+
     try:
         client = OpenAI(
             api_key=os.environ.get("LLM_API_KEY"),
@@ -51,13 +54,13 @@ if __name__ == "__main__":
         )
         model = os.environ.get("LLM_MODEL")
 
-        scrapers: List[Dict[str, BaseScaper]] = [
+        scrapers: List[Dict[str, Any]] = [
             {
                 "scraper": CamaraDepScraper,
                 "params": {
                     "verbose": False,
                     "year_start": 1808,
-                    "year_end": 2024,
+                    "max_workers": 32,
                 },
                 "name": "Camara dos Deputados",
                 "run": False,
@@ -65,7 +68,7 @@ if __name__ == "__main__":
             {
                 "scraper": ConamaScraper,
                 "params": {
-                    "year_start": 1984,
+                    "year_start": 1984, # 1984 is the earliest year available
                     "docs_save_dir": ONEDRIVE_SPECIFIC_LEGISLATION_SAVE_DIR,
                     "verbose": True,
                 },
@@ -86,7 +89,7 @@ if __name__ == "__main__":
             {
                 "scraper": AcreLegisScraper,
                 "params": {
-                    "year_start": 1800,
+                    "year_start": 1963, # 1963 is the earliest year available
                     "verbose": True,
                     "max_workers": 32,
                 },
@@ -96,7 +99,7 @@ if __name__ == "__main__":
             {
                 "scraper": AlagoasSefazScraper,
                 "params": {
-                    "year_start": 2010,
+                    "year_start": 1900, # 1900 is the earliest year available
                     "llm_client": client,  # we have pdf image extraction
                     "llm_model": model,
                     "verbose": True,
@@ -108,7 +111,7 @@ if __name__ == "__main__":
             {
                 "scraper": LegislaAMScraper,
                 "params": {
-                    "year_start": 1953,
+                    "year_start": 1953, # 1953 is the earliest year available
                     "verbose": True,
                     "max_workers": 32,
                 },
@@ -154,7 +157,7 @@ if __name__ == "__main__":
                     "verbose": True,
                 },
                 "name": "DFSinj",
-                "run": False,
+                "run": True,
             },
             {
                 "scraper": ESAlesScraper,
@@ -340,7 +343,7 @@ if __name__ == "__main__":
                     "max_workers": 32,
                 },
                 "name": "RNAlrn",
-                "run": True,
+                "run": False,
             },
             {
                 "scraper": SaoPauloAlespScraper,
@@ -350,13 +353,11 @@ if __name__ == "__main__":
             },
         ]
 
-        running_scrapers = []
-
         for scraper in scrapers:
             if scraper["run"]:
-                scrapper_instance = scraper["scraper"](**scraper["params"])
-                running_scrapers.append(scrapper_instance)
-                data = scrapper_instance.scrape()
+                scraper_instance = scraper["scraper"](**scraper["params"])
+                running_scrapers.append(scraper_instance)
+                data = scraper_instance.scrape()
                 # data = scraper["scraper"](**scraper["params"]).scrape()
                 print(f"Scraped {len(data)} data for {scraper['name']}")
 

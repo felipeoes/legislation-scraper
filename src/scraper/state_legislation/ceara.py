@@ -75,14 +75,14 @@ class CearaAleceScraper(BaseScaper):
         items = table.find_all("tr")
         for item in items:
             tds = item.find_all("td")
-            if len(tds) != 4:
+            if len(tds) != 5:
                 continue
 
             norm_number = tds[0].text.strip()
             year = norm_number.split("/")[1]
             title = norm_number
             summary = tds[2].text.strip()
-            document_url = tds[3].find("a")["href"]
+            document_url = tds[4].find("a")["href"]
             docs.append(
                 {
                     "title": f"{norm_type} {title}",

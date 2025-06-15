@@ -1,3 +1,4 @@
+from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -71,6 +72,10 @@ class BahiaLegislaScraper(BaseScaper):
         Returns a list of dicts with keys 'title', 'html_link'
         """
         soup = self._get_soup(url)
+
+        if not soup:
+            raise ValueError(f"Failed to get soup for URL: {url}")
+        
         docs = []
 
         # check if the page is empty ("Nenhum resultado encontrado")
@@ -96,33 +101,37 @@ class BahiaLegislaScraper(BaseScaper):
 
         return docs
 
-    def _get_doc_data(self, doc_info: dict) -> dict:
+    def _get_doc_data(self, doc_info: dict) -> Optional[dict]:
         """Get document data from given document dict"""
         # remove html_link from doc_info
         html_link = doc_info.pop("html_link")
         url = requests.compat.urljoin(self.base_url, html_link)
 
         response = self._make_request(url)
+        if not response:
+            print(f"Failed to get document data from URL: {url}")
+            return None
+        
         soup = BeautifulSoup(response.content, "html.parser")
 
         # get norm_number, date, publication_date and summary
         norm_number = soup.find("div", class_="field--name-field-numero-doc")
         if norm_number:
-            norm_number = norm_number.find("div", class_="field--item")
+            norm_number = norm_number.find("div", class_="field--item") # type: ignore
 
         date = soup.find("div", class_="field--name-field-data-doc")
         if date:
-            date = date.find("div", class_="field--item")
+            date = date.find("div", class_="field--item") # type: ignore
 
         publication_date = soup.find(
             "div", class_="field--name-field-data-de-publicacao-no-doe"
         )
         if publication_date:
-            publication_date = publication_date.find("div", class_="field--item")
+            publication_date = publication_date.find("div", class_="field--item") # type: ignore
 
         summary = soup.find("div", class_="field--name-field-ementa")
         if summary:
-            summary = summary.find("div", class_="field--item")
+            summary = summary.find("div", class_="field--item") # type: ignore
 
         # get html string and text markdown
         # class="visivel-separador field field--name-body field--type-text-with-summary field--label-hidden field--item"

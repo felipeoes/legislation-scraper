@@ -1,4 +1,6 @@
 import requests
+import urllib.parse
+from typing import Dict, List, Optional
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -36,9 +38,8 @@ class ConamaScraper(BaseScaper):
     def __init__(
         self,
         base_url: str = "https://conama.mma.gov.br/",
-        **kwargs,
-    ):
-        super().__init__(base_url, types=TYPES, situations=SITUATIONS, **kwargs)
+        **kwargs,    ):
+        super().__init__(base_url, types=list(TYPES.keys()), situations=SITUATIONS, **kwargs)
         self.params = {
             "option": "com_sisconama",
             "order": "asc",
@@ -53,7 +54,7 @@ class ConamaScraper(BaseScaper):
         """Format url for search request"""
         return f"{self.base_url}?option={self.params['option']}&order={self.params['order']}&offset={self.params['offset']}&limit={self.params['limit']}&task={self.params['task']}&tipo={TYPES[norm_type]}&ano={self.params['ano']}"
 
-    def _get_doc_data(self, doc_info: dict) -> dict:
+    def _get_doc_data(self, doc_info: dict) -> Optional[Dict]:  
         """Get document data from norm dict. Download url for pdf will follow the pattern: https://conama.mma.gov.br/?option=com_sisconama&task=arquivo.download&id={id}"""
         doc_id = doc_info["aid"]
         doc_number = doc_info["numero"]
@@ -62,7 +63,7 @@ class ConamaScraper(BaseScaper):
         doc_status = doc_info["status"]
         doc_keyword = doc_info["palavra_chave"]
         doc_origin = doc_info["porigem"]
-        doc_url = requests.compat.urljoin(
+        doc_url = urllib.parse.urljoin(
             self.base_url,
             f"?option=com_sisconama&task=arquivo.download&id={doc_id}",
         )
@@ -86,8 +87,11 @@ class ConamaScraper(BaseScaper):
             "document_url": doc_url,
         }
 
-    def _scrape_year(self, year: str):
+    def _scrape_year(self, year: int) -> List[Dict]:
         """Scrape norms for a specific year"""
+        results = []
+        year_str = str(year)
+        
         for situation in tqdm(
             self.situations,
             desc="CONAMA | Situations",
@@ -100,24 +104,30 @@ class ConamaScraper(BaseScaper):
                 total=len(self.types),
                 disable=not self.verbose,
             ):
-                self.params["ano"] = year
+                self.params["ano"] = year_str
                 self.params["offset"] = 0
                 url = self._format_search_url(norm_type)
 
-                data = self._make_request(url).json()["data"]
+                response = self._make_request(url)
+                if response is None:
+                    continue
+                data = response.json()["data"]
                 total_norms = data["total"]
 
                 norms = []
                 norms.extend(data["rows"])
-
+                
                 # get all norms
                 while self.params["offset"] < total_norms:
                     self.params["offset"] += self.params["limit"]
                     url = self._format_search_url(norm_type)
-                    data = self._make_request(url).json()["data"]
+                    response = self._make_request(url)
+                    if response is None:
+                        break
+                    data = response.json()["data"]
                     norms.extend(data["rows"])
 
-                results = []
+                type_results = []
                 # get all norm data
                 with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                     futures = [
@@ -136,19 +146,22 @@ class ConamaScraper(BaseScaper):
 
                         # save to one drive
                         queue_item = {
-                            "year": year,
+                            "year": year_str,
                             "type": norm_type,
                             "situation": situation,
                             **result,
                         }
 
                         self.queue.put(queue_item)
-                        results.append(queue_item)
+                        type_results.append(queue_item)
 
-                    self.results.extend(results)
-                    self.count += len(results)
+                    results.extend(type_results)
+                    self.results.extend(type_results)
+                    self.count += len(type_results)
 
                     if self.verbose:
                         print(
-                            f"Year: {year} | Type: {norm_type} | Situation: {situation} | Total: {len(results)}"
+                            f"Year: {year_str} | Type: {norm_type} | Situation: {situation} | Total: {len(type_results)}"
                         )
+        
+        return results

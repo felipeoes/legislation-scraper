@@ -28,7 +28,7 @@ INVALID_SITUATIONS = (
 # the reason to have invalid situations is in case we need to train a classifier to predict if a norm is valid or something else similar
 SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
 
-
+# NOTE: ICmbio website seems to gotten shut down, so should use another source for this scraper
 class ICMBioScraper(BaseScaper):
     """Webscraper for ICMBio (Instituto Chico Mendes de Conservação da Biodiversidade) website (https://www.icmbio.gov.br/cepsul/legislacao)
 

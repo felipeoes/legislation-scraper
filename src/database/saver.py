@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 load_dotenv()
 
-ONEDRIVE_SAVE_DIR = rf"{environ.get('ONEDRIVE_SAVE_DIR', 'outputs/legislation')}"
+ONEDRIVE_SAVE_DIR = Path(rf"{environ.get('ONEDRIVE_SAVE_DIR', 'outputs/legislation')}")
 ERROR_LOG_DIR = rf"{environ.get('ERROR_LOG_DIR', 'logs/legislation')}"
 
 print(f"Default saving to ONEDRIVE_SAVE_DIR: {ONEDRIVE_SAVE_DIR}")
@@ -26,7 +26,7 @@ class OneDriveSaver(Thread):
         self,
         queue: Queue,
         error_queue: Queue,
-        save_dir: str = ONEDRIVE_SAVE_DIR,
+        save_dir: Path = ONEDRIVE_SAVE_DIR,
         error_log_dir: str = ERROR_LOG_DIR,
         max_path_length: int = 245,  # sinology max path length
     ):
@@ -48,11 +48,16 @@ class OneDriveSaver(Thread):
     def _set_last_year(self):
         """Set the last year that was saved (always the year before the current year in save_dir, to account for some possible delay in saving)"""
         save_dir = Path(self.save_dir)
+
         if not save_dir.exists():
             self.last_year = None
             return
 
-        years = [int(year.name) for year in save_dir.iterdir() if year.is_dir()]
+        years = []
+        for year_dir in save_dir.iterdir():
+            if year_dir.is_dir() and year_dir.name.isdigit():
+                years.append(int(year_dir.name))
+
         self.last_year = max(years) - 1 if years else None
 
     def run(self):
@@ -99,6 +104,7 @@ class OneDriveSaver(Thread):
     def save(self, data: dict):
         """Save data to json file. Data will be a dict with keys 'title', 'year', 'situation', 'type', 'summary', 'html_string' and 'document_url'. Folder structure will be 'ONEDRIVE_SAVE_DIR/{year}/{type}/{situation}/{title}_{document_url}.json'"""
         with self.lock:
+            file_path = None
             try:
                 save_dir = Path(self.save_dir)
                 year_dir = save_dir / str(data["year"])
@@ -126,12 +132,17 @@ class OneDriveSaver(Thread):
                     json.dump(data, f, ensure_ascii=True, indent=4)
 
             except Exception as e:
-                print(f"Error saving {data['title']} to {file_path}: {e}")
+                error_msg = f"Error saving {data['title']}"
+                if file_path:
+                    error_msg += f" to {file_path}"
+                error_msg += f": {e}"
+                print(error_msg)
                 self.save_error(data)
 
     def save_error(self, data: dict):
         """Save error data to txt file. Data will be a dict with keys {"title": title, "year": self.params["ano"], "situation": self.params["situacao"], "type": self.params["tipo"], "summary": summary, "html_link": document_html_link}. Folder structure will be 'ERROR_LOG_DIR/{year}/{type}/{situation}/{title}_{document_url}.json"""
         with self.lock:
+            file_path = None
             try:
                 save_dir = Path(self.error_log_dir)
                 year_dir = save_dir / str(data["year"])
@@ -159,7 +170,11 @@ class OneDriveSaver(Thread):
                     json.dump(data, f, ensure_ascii=False, indent=4)
 
             except Exception as e:
-                print(f"Error saving error {data['title']} to {file_path}: {e}")
+                error_msg = f"Error saving error {data['title']}"
+                if file_path:
+                    error_msg += f" to {file_path}"
+                error_msg += f": {e}"
+                print(error_msg)
 
     def stop(self):
         print(f"Sending stop signal to {self.__class__.__name__}")

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests.compat
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
+from typing import Union, Dict, Optional
 
 
 TYPES = {
@@ -19,7 +20,7 @@ VALID_SITUATIONS = [
     "Não consta"
 ]  # Alap does not have a situation field, invalid norms will have an indication in the document text
 
-INVALID_SITUATIONS = []  # norms with these situations are invalid norms (no lon
+INVALID_SITUATIONS = []  # norms with these situations are invalid norms (no longer have legal effect)
 
 # the reason to have invalid situations is in case we need to train a classifier to predict if a norm is valid or something else similar
 SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
@@ -38,7 +39,7 @@ class AmapaAlapScraper(BaseScaper):
     ):
         super().__init__(base_url, types=TYPES, situations=SITUATIONS, **kwargs)
         self.docs_save_dir = self.docs_save_dir / "AMAPA"
-        self.params = {
+        self.params: Dict[str, Union[str, int]] = {
             "pg": "buscar_legislacao",
             "aba": "legislacao",
             "submenu": "listar_legislacao",
@@ -69,6 +70,8 @@ class AmapaAlapScraper(BaseScaper):
         Returns a list of dicts with keys 'title', 'summary', 'doe_number', 'date',  'proposition_number', 'html_link'
         """
         soup = self._get_soup(url)
+        if not soup:
+            raise ValueError(f"Failed to get soup for URL: {url}")
 
         docs = []
         items = soup.find("tbody").find_all("tr")
@@ -133,13 +136,13 @@ class AmapaAlapScraper(BaseScaper):
         buffer.seek(0)
 
         text_markdown = self._get_markdown(stream=buffer)
-
+        
         doc_info["html_string"] = html_string
         doc_info["text_markdown"] = text_markdown
         doc_info["document_url"] = url
 
         return doc_info
-
+    
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
         for situation in tqdm(
@@ -162,30 +165,43 @@ class AmapaAlapScraper(BaseScaper):
 
                 # Get documents html links
                 documents = []
+                
                 while not self.reached_end_page:
-                    start_page = 1
+                    current_page = 1
+                    page_docs = []
+                    
                     with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                         futures = [
                             executor.submit(
                                 self._get_docs_links,
                                 self._format_search_url(norm_type_id, year, page),
                             )
-                            for page in range(start_page, total_pages + 1)
+                            for page in range(current_page, current_page + total_pages)
                         ]
 
                         for future in tqdm(
                             as_completed(futures),
-                            total=total_pages - start_page + 1,
+                            total=len(futures),
                             desc="AMAPA | Get document link",
                             disable=not self.verbose,
                         ):
                             docs = future.result()
                             if docs:
-                                documents.extend(docs)
+                                page_docs.extend(docs)
+                    
+                    # If we didn't get any docs or reached the end page, break the loop
+                    if not page_docs or self.reached_end_page:
+                        break
+                        
+                    # Add the documents from this batch to our total documents list
+                    documents.extend(page_docs)
+                    
+                    # Move to the next batch of pages
+                    current_page += total_pages
+                    total_pages = min(total_pages + 2, self.max_workers)  # Gradually increase pages but don't exceed max_workers
 
-                    start_page += total_pages
-                    total_pages += self.max_workers
-
+                # Only process documents if we found any
+                if documents:
                     # Get document data
                     results = []
                     with ThreadPoolExecutor(max_workers=self.max_workers) as executor:

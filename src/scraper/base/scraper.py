@@ -4,7 +4,7 @@ import time
 import fitz
 import psutil
 
-from typing import Union
+from typing import Dict, List, Optional, Union
 from PIL import Image
 from openai import OpenAI
 from io import BytesIO
@@ -15,7 +15,7 @@ from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 
 from markitdown import MarkItDown, UnsupportedFormatException, FileConversionException
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Queue
 from pathlib import Path
@@ -53,6 +53,7 @@ def retry(max_retries: int, base_delay: int = 3):
                         raise e
 
         return wrapper
+
     return decorator
 
 
@@ -62,24 +63,24 @@ class BaseScaper:
     def __init__(
         self,
         base_url: str,
-        types: list,
-        situations: str,
+        types: Union[list, dict],
+        situations: Union[list, dict],
         year_start: int = YEAR_START,
         year_end: int = datetime.now().year,
         docs_save_dir: Path = Path(ONEDRIVE_STATE_LEGISLATION_SAVE_DIR),
-        llm_client: OpenAI = None,
-        llm_model: str = None,
+        llm_client: Optional[OpenAI] = None,
+        llm_model: Optional[str] = None,
         llm_prompt: str = "Extraia todo  o conteúdo da imagem. Retorne somente o conteúdo extraído",
         use_selenium: bool = False,
         multiple_drivers: bool = False,
         use_selenium_vpn: bool = False,
-        vpn_extension_path: str = None,
-        vpn_extension_page: str = None,
+        vpn_extension_path: Optional[str] = None,
+        vpn_extension_page: Optional[str] = None,
         use_requests_session: bool = False,
         use_openvpn: bool = False,
-        config_files: list = None,
-        openvpn_credentials_map: dict = None,
-        proxies: dict = None,
+        config_files: Optional[list] = None,
+        openvpn_credentials_map: Optional[dict] = None,
+        proxies: Optional[dict] = None,
         max_workers: int = 16,
         verbose: bool = False,
     ):
@@ -110,17 +111,18 @@ class BaseScaper:
                             AppleWebKit/537.36 (KHTML, like Gecko) \
                             Chrome/80.0.3987.149 Safari/537.36"
         }
+        self.llm_md_header = "\n# Description:\n"
         self.queue = Queue()
         self.error_queue = Queue()
         self.results = []
         self.count = 0  # keep track of number of results
         self.md = MarkItDown(llm_client=llm_client, llm_model=llm_model)
         self.soup = None
-        self.session: requests.Session = None
-        self.driver: Chrome = None
+        self.session: requests.Session = requests.Session()
+        self.driver: Optional[Chrome] = None
         self.drivers: list[Chrome] = []
-        self.saver: OneDriveSaver = None
-        self.openvpn_manager: OpenVPNManager = None
+        self.saver: Optional[OneDriveSaver] = None
+        self.openvpn_manager: Optional[OpenVPNManager] = None
         self.initialize_selenium()
         self.initialize_requests_session()
         self.initialize_openvpn_manager()
@@ -128,7 +130,6 @@ class BaseScaper:
     def initialize_requests_session(self):
         """Initialize requests session"""
         if self.use_requests_session:
-            self.session = requests.Session()
             self.session.headers.update(self.headers)
 
     def initialize_selenium(self):
@@ -178,7 +179,7 @@ class BaseScaper:
         """Initialize openvpn manager"""
         if self.use_openvpn:
             self.openvpn_manager = OpenVPNManager(
-                config_files=self.config_files,
+                config_files=self.config_files if self.config_files is not None else [],
                 credentials_map=self.openvpn_credentials_map,
             )
 
@@ -204,9 +205,11 @@ class BaseScaper:
         self,
         url: str,
         method: str = "GET",
-        json: dict = None,
-        payload: list | dict = None,
-    ) -> requests.Response:
+        json: dict = {},
+        payload: list | dict = {},
+        *args,
+        **kwargs,
+    ) -> Optional[requests.Response]:
         """Make request to given url"""
         retries = 5
         for _ in range(retries):
@@ -219,12 +222,16 @@ class BaseScaper:
                         data=payload,  # payload will be used for form data in POST requests, useful when have files or duplicate keys
                         headers=self.headers,
                         verify=False,
+                        *args,
+                        **kwargs,
                     )
                 else:
                     response = self._get_request(
                         url,
                         headers=self.headers,
                         verify=False,
+                        *args,
+                        **kwargs,
                     )
 
                 # check  "O servidor encontrou um erro interno, ou está sobrecarregado" error
@@ -262,7 +269,7 @@ class BaseScaper:
 
         self.openvpn_manager.change_vpn_connection()
 
-    def _get_soup(self, url: Union[str, requests.Response]) -> BeautifulSoup:
+    def _get_soup(self, url: Union[str, requests.Response]) -> Optional[BeautifulSoup]:
         """Get BeautifulSoup object from given url"""
 
         if isinstance(url, requests.Response):
@@ -275,14 +282,16 @@ class BaseScaper:
 
         return BeautifulSoup(res.content, "html.parser")
 
-    def _selenium_get_soup(self, url: str, driver: Chrome = None) -> BeautifulSoup:
+    def _selenium_get_soup(
+        self, url: str, driver: Optional[Chrome] = None
+    ) -> BeautifulSoup:
         """Get BeautifulSoup object from given url using selenium"""
         retries = 3
         while retries > 0:
             try:
                 if driver:
                     driver.get(url)
-                else:
+                elif self.driver:
                     self.driver.get(url)
                 if self.use_openvpn:
                     self._handle_blocked_access()
@@ -296,7 +305,10 @@ class BaseScaper:
         if driver:
             return BeautifulSoup(driver.page_source, "html.parser")
 
-        return BeautifulSoup(self.driver.page_source, "html.parser")
+        if self.driver is not None:
+            return BeautifulSoup(self.driver.page_source, "html.parser")
+        else:
+            raise RuntimeError("Selenium driver is not initialized.")
 
     def _pdf_to_images(self, doc: fitz.Document) -> list:
         """
@@ -369,12 +381,13 @@ class BaseScaper:
 
     def _get_markdown(
         self,
-        url: str = None,
-        response: requests.Response = None,
-        stream: BytesIO = None,
+        url: Optional[str] = None,
+        response: Optional[requests.Response] = None,
+        stream: Optional[BytesIO] = None,
         retries: int = 2,
     ) -> str:
         """Get markdown response from given url"""
+        md_content = ""
         while retries > 0:
             try:
                 if stream is not None:
@@ -387,11 +400,15 @@ class BaseScaper:
                     ):  # for images, sometimes the mllm struggles to process, try again
                         continue
 
-                    return md_content
+                    return md_content.replace(self.llm_md_header, "").strip()
 
-                if response is None:
+                if response is None and url:
                     response = self._make_request(url)
-                md_content = self.md.convert(response).text_content
+
+                if response is not None:
+                    md_content = self.md.convert(response).text_content
+                else:
+                    md_content = ""
 
             except FileConversionException as e:
                 print(f"Error converting to markdown: {e}")
@@ -410,27 +427,44 @@ class BaseScaper:
 
             retries -= 1
 
-        return md_content
+        return md_content.replace(self.llm_md_header, "").strip()
 
     def _handle_blocked_access(self, *args, **kwargs):
         pass
 
-    def _format_search_url(self, *args, **kwargs):
-        pass
+    def _format_search_url(self, *args, **kwargs) -> str:
+        """Format search URL for the given parameters"""
+        raise NotImplementedError(
+            "This method should be implemented in the child class."
+        )
 
-    def _get_docs_links(self, *args, **kwargs):
-        pass
+    def _get_docs_links(self, *args, **kwargs) -> Optional[List[Dict]]:
+        """Get document links from the given parameters"""
+        raise NotImplementedError(
+            "This method should be implemented in the child class."
+        )
 
-    def _get_doc_data(self, *args, **kwargs):
-        pass
+    def _get_doc_data(self, *args, **kwargs) -> Optional[Dict]:
+        """Get document data from the given parameters"""
+        raise NotImplementedError(
+            "This method should be implemented in the child class."
+        )
 
     def _scrape_year(self, year: int):
-        pass
+        """Scrape norms for a specific year"""
+        raise NotImplementedError(
+            "This method should be implemented in the child class."
+        )
 
     def scrape(self) -> list:
         """Scrape data from all years"""
 
         # start saver thread
+        if not self.saver:
+            raise RuntimeError(
+                "Saver is not initialized. Call _initialize_saver() in the child class __init__ method."
+            )
+        
         self.saver.start()
 
         # check if can resume from last scrapped year

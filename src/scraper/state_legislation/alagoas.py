@@ -1,3 +1,4 @@
+from typing import List, Optional
 import requests
 import base64
 
@@ -75,7 +76,7 @@ class AlagoasSefazScraper(BaseScaper):
 
         return self.base_url
 
-    def _get_docs_links(self, url: str, norms: list):
+    def _get_docs_links(self, url: str, norms: list) -> Optional[List[dict]]:
         """Get document links from search request"""
         try:
             response = self._make_request(url, method="POST", json=self.params)
@@ -84,19 +85,19 @@ class AlagoasSefazScraper(BaseScaper):
                 return
 
             data = response.json()
-            # norms = data["documentos"]
             norms.extend(data["documentos"])
 
         except Exception as e:
             print(f"Error getting document links from url: {url} | Error: {e}")
 
-    def _get_doc_data(self, doc_info: dict) -> list:
+    def _get_doc_data(self, doc_info: dict) -> Optional[dict]:
         """Get document data from norm dict. Download url for pdf will follow the pattern: ttps://gcs2.sefaz.al.gov.br/#/documentos/visualizar-documento?acess={acess}&key={key}"""
 
         key = requests.utils.quote(
             requests.utils.quote(doc_info["link"]["key"])
         )  # need to double encode otherwise it will return 404
         doc_link = f"{self.view_doc_url}acess={doc_info['link']['acess']}&key={key}"
+        filename = ""
         try:
             # get text markdown
             response = self._make_request(doc_link).json()

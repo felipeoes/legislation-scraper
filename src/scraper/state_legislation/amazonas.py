@@ -71,7 +71,11 @@ class LegislaAMScraper(BaseScaper):
 
         for item in items:
             title = item.find("h5").text
-            html_link = item.find("a")["href"]
+            html_link = item.find("a")
+            if not html_link: # some norms do not have a link to text, skip them
+                continue
+            html_link = html_link.get("href")
+
             docs.append(
                 {
                     "title": title,
@@ -191,6 +195,9 @@ class LegislaAMScraper(BaseScaper):
 
                     start_page += total_pages
                     total_pages += 10
+
+                    if start_page > total_pages: # adding this condition to avoid infinite loop for some buggy pages
+                        self.reached_end_page = True
 
                 # Get document data
                 results = []
