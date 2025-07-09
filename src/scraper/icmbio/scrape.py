@@ -29,6 +29,7 @@ INVALID_SITUATIONS = (
 SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
 
 
+# NOTE: ICmbio website seems to gotten shut down, so should use another source for this scraper
 class ICMBioScraper(BaseScaper):
     """Webscraper for ICMBio (Instituto Chico Mendes de Conservação da Biodiversidade) website (https://www.icmbio.gov.br/cepsul/legislacao)
 
@@ -36,7 +37,7 @@ class ICMBioScraper(BaseScaper):
     """
 
     def __init__(
-        self,   
+        self,
         base_url: str = "https://www.icmbio.gov.br/cepsul/legislacao",
         **kwargs,
     ):
@@ -87,12 +88,12 @@ class ICMBioScraper(BaseScaper):
             tds = tr.find_all("td")
             if len(tds) != 5:
                 continue
-            
+
             # if all tds are empty, continue
             if all([td.text.strip() == "" for td in tds]):
                 continue
-            
-            try: # some documents don't have link to pdf, in this case we will skip them
+
+            try:  # some documents don't have link to pdf, in this case we will skip them
                 title = tds[0].find("a").text.strip()
                 date = tds[1].text.strip()
                 uf = tds[2].text.strip()

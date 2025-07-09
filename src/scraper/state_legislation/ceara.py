@@ -20,7 +20,7 @@ TYPES = {
 
 VALID_SITUATIONS = [
     "Não consta"
-]  # Conama does not have a situation field, invalid norms will have an indication in the document text
+]  # Alece does not have a situation field, invalid norms will have an indication in the document text
 
 INVALID_SITUATIONS = []  # norms with these situations are invalid norms (no lon
 
@@ -75,14 +75,14 @@ class CearaAleceScraper(BaseScaper):
         items = table.find_all("tr")
         for item in items:
             tds = item.find_all("td")
-            if len(tds) != 4:
+            if len(tds) != 5:
                 continue
 
             norm_number = tds[0].text.strip()
             year = norm_number.split("/")[1]
             title = norm_number
             summary = tds[2].text.strip()
-            document_url = tds[3].find("a")["href"]
+            document_url = tds[4].find("a")["href"]
             docs.append(
                 {
                     "title": f"{norm_type} {title}",
@@ -170,7 +170,7 @@ class CearaAleceScraper(BaseScaper):
 
             if self.verbose:
                 print(
-                    f"Finished scraping for Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
+                    f"Finished scraping for | Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
                 )
 
     def _get_laws_constitution_amendments_docs_links(
@@ -325,7 +325,7 @@ class CearaAleceScraper(BaseScaper):
 
             if self.verbose:
                 print(
-                    f"Finished scraping for Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
+                    f"Finished scraping for Year: {year} | Situation: {situation} | Type: {norm_type} | Results: {len(results)} | Total: {self.count}"
                 )
 
     def scrape(self) -> list:
@@ -351,7 +351,7 @@ class CearaAleceScraper(BaseScaper):
         ):
             for norm_type, norm_type_id in tqdm(
                 self.types.items(),
-                desc=f"CEARA | Types",
+                desc="CEARA | Types",
                 total=len(self.types),
                 disable=not self.verbose,
             ):
@@ -389,7 +389,7 @@ class CearaAleceScraper(BaseScaper):
 
                     for year in tqdm(
                         available_years,
-                        desc=f"CEARA | Years",
+                        desc="CEARA | Years",
                         total=len(self.years),
                         disable=not self.verbose,
                     ):
@@ -397,4 +397,4 @@ class CearaAleceScraper(BaseScaper):
                             situation, norm_type, norm_type_id, year
                         )
 
-            return self.results
+        return self.results

@@ -1,5 +1,4 @@
 import requests
-import re
 from bs4 import BeautifulSoup
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -36,6 +35,7 @@ class LegislaAMScraper(BaseScaper):
 
     Example search request: https://legisla.imprensaoficial.am.gov.br/diario_am/41535/2022?page=1
     """
+
     # TODO: Change scraper to be based on https://sapl.al.am.leg.br/norma/pesquisar
 
     def __init__(
@@ -71,7 +71,11 @@ class LegislaAMScraper(BaseScaper):
 
         for item in items:
             title = item.find("h5").text
-            html_link = item.find("a")["href"]
+            html_link = item.find("a")
+            if not html_link:  # some norms do not have a link to text, skip them
+                continue
+            html_link = html_link.get("href")
+
             docs.append(
                 {
                     "title": title,
@@ -169,8 +173,8 @@ class LegislaAMScraper(BaseScaper):
 
                 # Get documents html links
                 documents = []
+                start_page = 1
                 while not self.reached_end_page:
-                    start_page = 1
                     with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                         futures = [
                             executor.submit(
@@ -191,6 +195,11 @@ class LegislaAMScraper(BaseScaper):
 
                     start_page += total_pages
                     total_pages += 10
+
+                    if (
+                        start_page > total_pages
+                    ):  # adding this condition to avoid infinite loop for some buggy pages
+                        self.reached_end_page = True
 
                 # Get document data
                 results = []

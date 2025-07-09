@@ -1,23 +1,33 @@
-import requests
+import base64
 import re
-
-from bs4 import BeautifulSoup
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
+from io import BytesIO
+from typing import Any, Dict, List
+
+import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from tqdm import tqdm
+
 from src.scraper.base.scraper import BaseScaper
 
 load_dotenv()
 
-# http://alerjln1.alerj.rj.gov.br/contlei.nsf/DecretoAnoInt?OpenForm&Start=1&Count=300
 # obs: LeiComp = Lei Complementar; LeiOrd = Lei Ordinária;
-TYPES = ["Decreto", "Emenda", "LeiComp", "LeiOrd", "Resolucao"]
+TYPES = [
+    "Constituição Estadual",
+    "Decreto",
+    "Emenda",
+    "LeiComp",
+    "LeiOrd",
+    "Resolucao",
+]
 
-VALID_SITUATIONS = ["Sem revogação expressa"]
-
-INVALID_SITUATIONS = (
-    []
-)  # norms with these situations are invalid norms (no longer have legal effect)
+# situations will be inferred from the text of the norm
+VALID_SITUATIONS = []
+INVALID_SITUATIONS = []
+# norms with these situations are invalid norms (no longer have legal effect)
 
 # the reason to have invalid situations is in case we need to train a classifier to predict if a norm is valid or something else similar
 SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
@@ -29,18 +39,12 @@ class RJAlerjScraper(BaseScaper):
     Example search request: http://alerjln1.alerj.rj.gov.br/contlei.nsf/DecretoAnoInt?OpenForm&Start=1&Count=300
 
     Observation: Only valid norms are published on the Alerj website (the invalid ones are archived and available only on another search engine that is not working currently), so we don't need to check for validity
-
     """
 
     def __init__(
         self,
         base_url: str = "http://alerjln1.alerj.rj.gov.br/contlei.nsf",
         **kwargs,
-        # year_start: int = YEAR_START,
-        # year_end: int = datetime.now().year,
-        # docs_save_dir: str = Path(ONEDRIVE_STATE_LEGISLATION_SAVE_DIR)
-        # / "RIO_DE_JANEIRO",
-        # verbose: bool = False,
     ):
         super().__init__(base_url, types=TYPES, situations=SITUATIONS, **kwargs)
         self.params = {
@@ -49,155 +53,204 @@ class RJAlerjScraper(BaseScaper):
             "Count": 500,
         }
         self.docs_save_dir = self.docs_save_dir / "RIO_DE_JANEIRO"
+        self.fetched_constitution = False
         self._initialize_saver()
 
     def _format_search_url(self, norm_type: str) -> str:
         """Format url for search request"""
         return f"{self.base_url}/{norm_type}AnoInt?OpenForm&Start={self.params['Start']}&Count={self.params['Count']}"
 
-    def _get_docs_html_links(self, norm_type: str, soup: BeautifulSoup) -> list:
-        """Get documents html links from soup object.
-        Returns a list of dicts with keys 'title', 'date', 'author', 'summary' and 'html_link'
-        """
-
-        # get all tr's with 6 td's
-        trs = soup.find_all("tr", valign="top")
-
-        # get all html links
+    def _get_docs_html_links(
+        self, norm_type: str, soup: BeautifulSoup
+    ) -> List[Dict[str, Any]]:
+        """Get documents html links from soup object."""
         html_links = []
-        for tr in trs:
+        for tr in soup.find_all("tr", valign="top"):
             tds = tr.find_all("td")
-            if len(tds) == 6:
-                title = f"{norm_type} {tds[1].text.strip()}"
-                date = tds[2].text.strip()
-                author = tds[3].text.strip()
-                summary = tds[4].text.strip()
-                url = tds[1].find("a")["href"]
-                html_link = requests.compat.urljoin(self.base_url, url)
-                html_links.append(
-                    {
-                        "title": title,
-                        "date": date,
-                        "author": author,
-                        "summary": summary,
-                        "html_link": html_link,
-                    }
-                )
+            if len(tds) != 6:
+                continue
 
+            link_tag = tds[1].find("a")
+            if not link_tag or not link_tag.has_attr("href"):
+                continue
+
+            url = urllib.parse.urljoin(self.base_url, link_tag["href"])
+            html_links.append(
+                {
+                    "title": f"{norm_type} {tds[1].text.strip()}",
+                    "date": tds[2].text.strip(),
+                    "author": tds[3].text.strip(),
+                    "summary": tds[4].text.strip(),
+                    "html_link": url,
+                }
+            )
         return html_links
+
+    def _html_to_markdown(self, html_string: str) -> str:
+        """Converts an HTML string to Markdown."""
+        # Add <html><body> tags to the html string to avoid error with markdown conversion
+        full_html = f"<html><body>{html_string}</body></html>"
+        buffer = BytesIO(full_html.encode())
+        return self._get_markdown(stream=buffer).strip()
 
     def _get_doc_data(self, doc_info: dict) -> dict:
         """Get document data from given html link"""
         doc_html_link = doc_info["html_link"]
         soup = self._get_soup(doc_html_link)
 
-        # check if <font > some text [ Revogado ] some text</font> exists and skip if it does
-        if soup.find("font", text=re.compile(r"\s*\[ Revogado \]\s*")):
-            return None
-
-        # get all html content in body until reach <a name="_Section2"></a>
         body = soup.body
-        if body is None:
+        if not body:
             return None
 
-        # Decompose all descendants after <a name="_Section2"></a>
-        descendants = [desc for desc in body.descendants]
-        start = False
-        for desc in descendants:
-            if not desc:
-                continue
+        # Decompose all content after the main section
+        section2_tag = body.find("a", attrs={"name": "_Section2"})
+        if section2_tag:
+            for tag in section2_tag.find_all_next():
+                tag.decompose()
+            section2_tag.decompose()
 
-            if desc.name == "a" and desc.get("name") == "_Section2":
-                start = True
+        # Clean up the HTML
+        for img_tag in body.find_all("img"):
+            img_tag.decompose()
+        for a_tag in body.find_all("a"):
+            a_tag.unwrap()
 
-            if start and not desc.decomposed and hasattr(desc, "decompose"):
-                desc.decompose()
+        # Determine situation
+        situation = (
+            "Revogada"
+            if soup.find("font", text=re.compile(r"\s*\[ Revogado \]\s*"))
+            else "Sem revogação expressa"
+        )
 
-        # Remove all <s> tags, which are not valid articles or paragraphs in the norm
-        for s in body.find_all("s"):
-            if not s:
-                continue
-
-            if not s.decomposed and hasattr(s, "decompose"):
-                s.decompose()
-
-        html_string = body.prettify(formatter="html")
-
-        # get text markdown
-        text_markdown = self._get_markdown(doc_html_link)
+        html_string = body.prettify().replace("\n", "")
+        text_markdown = self._html_to_markdown(html_string)
 
         return {
             **doc_info,
-            "situation": "situation",
+            "situation": situation,
             "html_string": html_string,
             "text_markdown": text_markdown,
-            "document_url": doc_html_link.strip().replace(
-                "?OpenDocument", ""
-            ),  # need to remove just for alerj
+            "document_url": doc_html_link.strip().replace("?OpenDocument", ""),
         }
+
+    def _build_constitution_section_url(self, data_role: str) -> str:
+        """Builds the URL for a section of the constitution."""
+        base_url = "http://www3.alerj.rj.gov.br/lotus_notes/default.asp"
+        encoded_path = base64.b64encode(data_role.encode("utf-8")).decode("ascii")
+        query_params = {"id": 73, "url": encoded_path}
+        return f"{base_url}?{urllib.parse.urlencode(query_params)}"
+
+    def _clean_constitution_section_soup(self, soup: BeautifulSoup):
+        """Cleans the BeautifulSoup object of a constitution section."""
+        for div_to_remove in soup.find_all("div", class_="alert alert-warning"):
+            div_to_remove.decompose()
+        for div_to_remove in soup.find_all("div", id="barraBotoes"):
+            div_to_remove.decompose()
+        for tag_to_remove in soup.find_all(
+            text=re.compile(r"Texto do Título|Texto do Capítulo|Texto da Seção")
+        ):
+            parent = tag_to_remove.parent
+            if parent and not parent.decomposed:
+                parent.decompose()
+        for img_to_remove in soup.find_all("img"):
+            img_to_remove.decompose()
+
+    def scrape_constitution(self):
+        """Scrape constitution data"""
+        constitution_url = "http://www3.alerj.rj.gov.br/lotus_notes/default.asp?id=73&url=L2NvbnN0ZXN0Lm5zZi9JbmRpY2VJbnQ/T3BlbkZvcm0mU3RhcnQ9MSZDb3VudD0zMDA="
+        soup = self._get_soup(constitution_url)
+
+        a_links = [
+            a
+            for a in soup.find_all("a", attrs={"data-role": True})
+            if "Indice" not in a["data-role"]
+            and "OpenNavigator" not in a["data-role"]
+            and "EMENDAS CONSTITUCIONAIS" not in a.text.strip().upper()
+        ]
+
+        html_parts = []
+        for a_link in tqdm(a_links, desc="RJ - ALERJ | Constitution"):
+            section_url = self._build_constitution_section_url(a_link["data-role"])
+            section_soup = self._get_soup(section_url)
+            self._clean_constitution_section_soup(section_soup)
+
+            content_div = section_soup.find("div", id="divConteudo")
+            if content_div:
+                html_parts.append(content_div.prettify().replace("\n", ""))
+
+        html_string = "<hr/>".join(html_parts)
+        text_markdown = self._html_to_markdown(html_string)
+
+        queue_item = {
+            "year": 1989,
+            "type": "Constituição Estadual",
+            "title": "Constituição Estadual do Rio de Janeiro",
+            "date": "05/10/1989",
+            "author": "",
+            "summary": "",
+            "html_link": constitution_url,
+            "html_string": f"<html><body>{html_string}</body></html>",
+            "text_markdown": text_markdown,
+            "situation": "Sem revogação expressa",
+            "document_url": constitution_url,
+        }
+
+        self.queue.put(queue_item)
+        self.results.append(queue_item)
+        self.count += 1
+        self.fetched_constitution = True
 
     def _scrape_year(self, year: str):
         """Scrape data from given year"""
-        # get data from all types
         for norm_type in tqdm(
             self.types, desc=f"RJ - ALERJ | {year} | Types", total=len(self.types)
         ):
+            if norm_type == "Constituição Estadual":
+                if not self.fetched_constitution:
+                    self.scrape_constitution()
+                continue
+
             url = self._format_search_url(norm_type)
             soup = self._get_soup(url)
 
-            # check if there are any results for the year
-            #  <tr valign="top"><td><a name="1"></a><a href="/contlei.nsf/LeiOrdAnoInt?OpenForm&amp;Start=1&amp;Count=500&amp;Expand=1" target="_self"><img src="/icons/expand.gif" border="0" height="16" width="16" alt="Show details for 2024"></a></td><td><b><font size="1" face="Verdana">2024</font></b></td></tr>
             if soup.find("tr", valign="top") is None:
                 continue
 
-            # find img item with 'Show details for {year}' that is inside a item
             img_item = soup.find("img", alt=f"Show details for {year}")
-            if img_item is None:
+            if not img_item:
                 continue
 
             year_item = img_item.find_parent("a")
-            if year_item is None:
+            if not year_item or not year_item.has_attr("href"):
                 continue
 
-            year_url = year_item["href"]
-            year_url = requests.compat.urljoin(url, year_url)
+            year_url = urllib.parse.urljoin(url, year_item["href"])
             soup = self._get_soup(year_url)
 
-            # get all tr's with 6 td's
             documents_html_links = self._get_docs_html_links(norm_type, soup)
 
-            results = []
-            # Get data from all  documents text links using ThreadPoolExecutor
+            scraped_docs = []
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = [
-                    executor.submit(self._get_doc_data, doc)
+                future_to_doc = {
+                    executor.submit(self._get_doc_data, doc): doc
                     for doc in documents_html_links
-                ]
-
+                }
                 for future in tqdm(
-                    as_completed(futures),
-                    desc=f"RJ - ALERJ | Get document data",
+                    as_completed(future_to_doc),
+                    desc=f"RJ - ALERJ | {year} | {norm_type}",
                     total=len(documents_html_links),
+                    leave=False,
                 ):
                     result = future.result()
+                    if result:
+                        queue_item = {"year": year, "type": norm_type, **result}
+                        self.queue.put(queue_item)
+                        scraped_docs.append(queue_item)
 
-                    if result is None:
-                        continue
+            self.results.extend(scraped_docs)
+            self.count += len(scraped_docs)
 
-                    # save to one drive
-                    queue_item = {
-                        "year": year,
-                        # website only shows documents without any revocation
-                        "situation": "Sem revogação expressa",
-                        "type": norm_type,
-                        **result,
-                    }
-
-                    self.queue.put(queue_item)
-                    self.results.append(queue_item)
-
-                self.results.extend(results)
-                self.count += len(results)
-
-                if self.verbose:
-                    print(f"Scraped {len(results)} data for {norm_type}  in {year}")
+            if self.verbose:
+                print(
+                    f"Scraped {len(scraped_docs)} {norm_type} documents in {year}"
+                )
