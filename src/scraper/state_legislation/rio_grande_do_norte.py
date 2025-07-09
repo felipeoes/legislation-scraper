@@ -172,7 +172,7 @@ class RNAlrnScraper(BaseScaper):
                         self.queue.put(queue_item)
                         results.append(queue_item)
                     else:
-                        print(f"Invalid document returned from get_doc_data")
+                        print("Invalid document returned from get_doc_data")
                 except Exception as e:
                     print(f"Error getting document data: {e}")
 
@@ -208,7 +208,7 @@ class RNAlrnScraper(BaseScaper):
         ):
             for norm_type, norm_type_id in tqdm(
                 self.types.items(),
-                desc=f"RIO GRANDE DO NORTE | Types",
+                desc="RIO GRANDE DO NORTE | Types",
                 total=len(self.types),
                 disable=not self.verbose,
             ):

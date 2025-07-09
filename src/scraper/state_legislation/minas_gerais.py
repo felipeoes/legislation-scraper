@@ -1,9 +1,10 @@
-import requests
 import re
 from io import BytesIO
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
+from urllib.parse import urlencode, urljoin 
 
 TYPES = {
     "Constituição Estadual": 2,
@@ -66,19 +67,22 @@ class MGAlmgScraper(BaseScaper):
     def _format_search_url(self, norm_type_id: str, year: int, page: int) -> str:
         """Format url for search request"""
         self.params["grupo"] = norm_type_id
-        self.params["ano"] = year
-        self.params["pagina"] = page
-        return f"{self.base_url}/atividade-parlamentar/leis/legislacao-mineira?{requests.compat.urlencode(self.params)}"
+        self.params["ano"] = str(year)
+        self.params["pagina"] = str(page)
+        return f"{self.base_url}/atividade-parlamentar/leis/legislacao-mineira?{urlencode(self.params)}"
 
     def _get_docs_links(self, url: str) -> list:
         """Get documents html links from given page.
         Returns a list of dicts with keys 'title', 'summary', 'html_link'
         """
         soup = self._get_soup(url)
-
+        
+        if soup is None:
+            return []
+            
         docs = []
 
-        items = soup.find_all("article")
+        items = soup.find_all("article") if soup else []
         # check if the page is empty
         if len(items) == 0:
             self.reached_end_page = True
@@ -92,57 +96,82 @@ class MGAlmgScraper(BaseScaper):
 
         return docs
 
-    def _get_doc_data(self, doc_info: dict) -> dict:
+    def _get_doc_data(self, doc_info: dict) -> Optional[dict]:
         """Get document data from given document dict"""
         # remove html_link from doc_info
         html_link = doc_info.pop("html_link")
-        url = requests.compat.urljoin(self.base_url, html_link)
+        url = urljoin(self.base_url, html_link)
 
         soup_data = self._get_soup(url)
+        
+        if soup_data is None:
+            return None
 
         origin = soup_data.find("span", text="Origem")
-        if origin:
-            origin = origin.next_sibling.text.strip()
+        origin_text = ""
+        if origin and origin.next_sibling and hasattr(origin.next_sibling, "text"):
+            origin_text = origin.next_sibling.text.strip()
         else:  # may have multiple origens
             origin = soup_data.find("span", text="Origens")
-            # <h2 class="d-none">PL&nbsp;PROJETO DE LEI&nbsp;1191/1964</h2>
-            h2s = origin.find_all_next("h2", class_="d-none")
-            origin = ", ".join([h2.text.strip() for h2 in h2s])
+            if origin:
+                # <h2 class="d-none">PL&nbsp;PROJETO DE LEI&nbsp;1191/1964</h2>
+                h2s = origin.find_all_next("h2", class_="d-none")
+                if h2s:
+                    origin_text = ", ".join([h2.text.strip() for h2 in h2s])
 
         situation = soup_data.find("span", text="Situação")
-        if situation:
-            situation = situation.next_sibling.text.strip().capitalize()
+        situation_text = ""
+        if situation and situation.next_sibling and hasattr(situation.next_sibling, "text"):
+            situation_text = situation.next_sibling.text.strip().capitalize()
 
         publication = soup_data.find("span", text="Fonte")
+        publication_text = ""
         if publication:
-            publication = publication.find_next("div").text.strip()
+            pub_div = publication.find_next("div")
+            if pub_div and hasattr(pub_div, "text"):
+                publication_text = pub_div.text.strip()
 
         tags = soup_data.find("span", text="Resumo")
-        if tags:
-            tags = tags.next_sibling.text.strip()
+        tags_text = ""
+        if tags and tags.next_sibling and hasattr(tags.next_sibling, "text"):
+            tags_text = tags.next_sibling.text.strip()
 
         subject = soup_data.find("span", text="Assunto Geral")
-        if subject:
-            subject = subject.next_sibling.text.strip()
+        subject_text = ""
+        if subject and subject.next_sibling and hasattr(subject.next_sibling, "text"):
+            subject_text = subject.next_sibling.text.strip()
 
         # get link for real html (first look for Text atualizado, if not found, look for Texto original)
-        html_link = soup_data.find(lambda tag: tag.text.strip() == "Texto atualizado")
-        if html_link:
-            html_link = html_link.find("a")["href"]
-        else:
-
-            html_link = soup_data.find(lambda tag: tag.text.strip() == "Texto original")
-            if html_link:
-                html_link = html_link.find("a")["href"]
-
-        html_link = requests.compat.urljoin(self.base_url, html_link)
-        if (
-            html_link == self.base_url
-        ):  # norm is invalid because it does not have a link to the document text
+        html_link_text = None
+        
+        # Look for texts that could contain the link
+        for elem in soup_data.find_all(text=re.compile('|'.join(["Texto atualizado", "Texto original"]))):
+            parent = elem.parent
+            if parent:
+                # Find the nearest a tag that has an href attribute
+                a_tag = parent.find("a") or parent
+                if a_tag and a_tag.has_attr("href"):
+                    html_link_text = a_tag["href"]
+                    break
+        
+        if not html_link_text:
+            return None
+        
+        html_link = urljoin(self.base_url, html_link_text)
+        if html_link == self.base_url:  # norm is invalid because it does not have a link to the document text
             return None
 
         soup = self._get_soup(html_link)
-        norm_text_tag = soup.find("span", class_="textNorma").prettify()
+        if soup is None:
+            return None
+            
+        text_norm_span = soup.find("span", class_="textNorma")
+        if text_norm_span is None:
+            return None
+            
+        # Use str() if prettify() is not available
+        # Use string representation for all elements to avoid prettify issues
+        norm_text_tag = str(text_norm_span)
 
         # remove Data da última atualização: 14/09/2007 from text
         norm_text_tag = re.sub(
@@ -162,11 +191,11 @@ class MGAlmgScraper(BaseScaper):
 
         return {
             **doc_info,
-            "origin": origin,
-            "situation": situation,
-            "publication": publication,
-            "tags": tags,
-            "subject": subject,
+            "origin": origin_text,
+            "situation": situation_text,
+            "publication": publication_text,
+            "tags": tags_text,
+            "subject": subject_text,
             "html_string": html_string,
             "text_markdown": text_markdown,
             "document_url": html_link,
@@ -180,10 +209,13 @@ class MGAlmgScraper(BaseScaper):
             total=len(self.situations),
             disable=not self.verbose,
         ):
+            # Convert self.types to a dictionary if it's not already
+            types_dict = self.types if isinstance(self.types, dict) else {k: i for i, k in enumerate(self.types)}
+            
             for norm_type, norm_type_id in tqdm(
-                self.types.items(),
+                types_dict.items(),
                 desc=f"MINAS GERAIS | Year: {year} | Types",
-                total=len(self.types),
+                total=len(types_dict),
                 disable=not self.verbose,
             ):
 

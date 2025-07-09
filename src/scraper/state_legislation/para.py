@@ -1,4 +1,5 @@
 import re
+from typing import Optional
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -71,6 +72,10 @@ class ParaAlepaScraper(BaseScaper):
         Returns a list of dicts with keys 'title', 'summary', 'pdf_link'
         """
         response = self._make_request(url, method="POST", payload=self.params)
+        if not response:
+            print(f"Error fetching page: {url}")
+            return []
+        
         soup = BeautifulSoup(response.content, "html.parser")
 
         #   Total de Registros:                      0
@@ -103,7 +108,7 @@ class ParaAlepaScraper(BaseScaper):
 
         return docs
 
-    def _get_doc_data(self, doc_info: dict) -> dict:
+    def _get_doc_data(self, doc_info: dict) -> Optional[dict]:
         """Get document data from given document dict"""
         # remove pdf_link from doc_info
         pdf_link = doc_info.pop("pdf_link")
@@ -116,10 +121,10 @@ class ParaAlepaScraper(BaseScaper):
         doc_info["text_markdown"] = text_markdown
         doc_info["document_url"] = pdf_link
         return doc_info
-    
-    def _scrape_constitution(self): 
+
+    def _scrape_constitution(self):
         """Scrape the constitution"""
- 
+
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
         for situation in tqdm(

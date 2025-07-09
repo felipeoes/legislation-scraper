@@ -17,4 +17,4 @@ from .parana import ParanaCVScraper
 from .sao_paulo import SaoPauloAlespScraper
 from .rio_de_janeiro import RJAlerjScraper
 from .rio_grande_do_norte import RNAlrnScraper
-from .rio_grande_do_sul import RSAlrsScraper 
+from .rio_grande_do_sul import RSAlrsScraper

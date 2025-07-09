@@ -2,7 +2,6 @@ import os
 import requests
 import time
 import fitz
-import psutil
 
 from typing import Dict, List, Optional, Union
 from PIL import Image
@@ -63,7 +62,7 @@ class BaseScaper:
     def __init__(
         self,
         base_url: str,
-        types: Union[list, dict],
+        types: Union[List, Dict],
         situations: Union[list, dict],
         year_start: int = YEAR_START,
         year_end: int = datetime.now().year,
@@ -257,7 +256,7 @@ class BaseScaper:
 
         return None
 
-    def _change_vpn_connection(self):
+    def _change_vpn_connection(self, *args, **kwargs):
         """Change VPN connection. Currently the supported VPN is ProtonVPN and the way to reconnect is by killing the process and starting it again."""
         if not self.use_openvpn:
             print("OpenVPN is not enabled, skipping VPN connection change")
@@ -444,13 +443,13 @@ class BaseScaper:
             "This method should be implemented in the child class."
         )
 
-    def _get_doc_data(self, *args, **kwargs) -> Optional[Dict]:
+    def _get_doc_data(self, *args, **kwargs) -> Optional[Union[Dict, List[Dict]]]:
         """Get document data from the given parameters"""
         raise NotImplementedError(
             "This method should be implemented in the child class."
         )
 
-    def _scrape_year(self, year: int):
+    def _scrape_year(self, year: int, *args, **kwargs) -> None:
         """Scrape norms for a specific year"""
         raise NotImplementedError(
             "This method should be implemented in the child class."
@@ -464,7 +463,7 @@ class BaseScaper:
             raise RuntimeError(
                 "Saver is not initialized. Call _initialize_saver() in the child class __init__ method."
             )
-        
+
         self.saver.start()
 
         # check if can resume from last scrapped year

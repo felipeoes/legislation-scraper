@@ -1,6 +1,6 @@
 import time
 import re
-import requests
+from urllib.parse import urljoin, urlencode
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -138,6 +138,9 @@ class MTAlmtScraper(BaseScaper):
         token_element = soup.find(
             "input", {"name": "almt_form_norma_juridica_ato_busca_avancada[_token]"}
         )
+        if not token_element:
+            raise ValueError("Token element not found in the page")
+
         token = token_element["value"]
         self.token = token
 
@@ -157,8 +160,7 @@ class MTAlmtScraper(BaseScaper):
                 "almt_form_norma_juridica_ato_busca_avancada[_token]"
             ] = self.token
             self.params_historic["page"] = page
-
-            return f"{self.base_url}/norma-juridica/pesquisa-historica?{requests.compat.urlencode(self.params_historic)}"
+            return f"{self.base_url}/norma-juridica/pesquisa-historica?{urlencode(self.params_historic)}"
         else:
             self.params["almt_form_norma_juridica_ato_busca_avancada[ano]"] = year
             self.params[
@@ -169,7 +171,7 @@ class MTAlmtScraper(BaseScaper):
             )
             self.params["page"] = page
 
-            return f"{self.base_url}/norma-juridica?{requests.compat.urlencode(self.params)}"
+            return f"{self.base_url}/norma-juridica?{urlencode(self.params)}"
 
     def _get_total_norms(self, soup: BeautifulSoup) -> int:
         """Get total number of norms from search page"""
@@ -184,6 +186,10 @@ class MTAlmtScraper(BaseScaper):
         Returns a list of dicts with keys 'title', 'summary', 'norm_link', 'document_url'
         """
         soup = self._get_soup(url)
+
+        if not soup:
+            print(f"Failed to get soup for url: {url}")
+            return []
 
         # check if the page is empty (no norms found for the given search)
         total_items = self._get_total_norms(soup)
@@ -210,7 +216,6 @@ class MTAlmtScraper(BaseScaper):
 
             if len(links) < 2:  # some documents are not available, so we skip them
                 continue
-
             document_url = links[0]["href"]
             norm_link = links[-1]["href"]
             # last link is the one to the norm, some norms include a link for proposition, that's why we need to get the last link
@@ -219,9 +224,7 @@ class MTAlmtScraper(BaseScaper):
                     "title": title,
                     "summary": summary,
                     "norm_link": norm_link,
-                    "document_url": requests.compat.urljoin(
-                        self.base_url, document_url
-                    ),
+                    "document_url": urljoin(self.base_url, document_url),
                 }
             )
 
@@ -229,19 +232,24 @@ class MTAlmtScraper(BaseScaper):
 
     def _get_doc_data(self, doc_info: dict, is_historic: bool = False) -> dict:
         """Get document data from given document dict"""
-        # remove norm_link from doc_info
         norm_link = doc_info.pop("norm_link")
 
         if is_historic:
-            url = requests.compat.urljoin(self.base_url, norm_link)
+            url = urljoin(self.base_url, norm_link)
         else:
-            url = f"{requests.compat.urljoin(self.base_url, norm_link)}/ficha-tecnica?exibirAnotacao=1"
+            url = f"{urljoin(self.base_url, norm_link)}/ficha-tecnica?exibirAnotacao=1"
+            url = f"{urljoin(self.base_url, norm_link)}/ficha-tecnica?exibirAnotacao=1"
 
         soup = self._get_soup(url)
-        if not soup:
+        retries = 5
+        while not soup:
             # try again, MT website is really unstable
             time.sleep(3)
             soup = self._get_soup(url)
+            retries -= 1
+            if retries <= 0:
+                print(f"Error getting soup for {url}")
+                return None
 
         # autor or autores
         author = soup.find("strong", text=re.compile(r"Autor:|Autores:"))

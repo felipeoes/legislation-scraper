@@ -145,8 +145,7 @@ class DatasetBuilder:
     def _read_json(self, path: str, index: int, total: int):
         try:
             if path:
-                data = pd.read_json(path, typ="series",
-                                    encoding="utf-8").to_dict()
+                data = pd.read_json(path, typ="series", encoding="utf-8").to_dict()
 
                 # check if 'html_string' or 'pdf_content' is empty
                 if "html_string" in data and not data["html_string"]:
@@ -187,8 +186,7 @@ class DatasetBuilder:
             ):
                 if path.is_file():
                     futures.append(
-                        executor.submit(self._read_json, path,
-                                        index, len(paths))
+                        executor.submit(self._read_json, path, index, len(paths))
                     )
 
             for future in tqdm(as_completed(futures), total=len(futures)):
@@ -203,8 +201,7 @@ class DatasetBuilder:
             time.sleep(5)
 
         # drop duplicates based on 'document_url' column ( May have duplicates because of the types "{norm_type} Sem Número")
-        df_pd = pd.DataFrame(self.data).drop_duplicates(
-            subset=["document_url"])
+        df_pd = pd.DataFrame(self.data).drop_duplicates(subset=["document_url"])
 
         print(f"Dataset shape: {df_pd.shape}")
         print(f"Dataset columns: {df_pd.columns}")

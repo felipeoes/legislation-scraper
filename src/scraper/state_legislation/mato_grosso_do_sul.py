@@ -1,8 +1,7 @@
-import requests
 from io import BytesIO
-from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+from urllib.parse import urlencode, urljoin
 from src.scraper.base.scraper import BaseScaper, YEAR_START
 
 TYPES = {
@@ -54,10 +53,9 @@ class MSAlemsScraper(BaseScaper):
 
     def _format_search_url(self, norm_type_id: str, year_index: int) -> str:
         """Format url for search request"""
-        self.params["Expand"] = year_index
-        return f"{self.base_url}/appls/legislacao/secoge/govato.nsf/{norm_type_id}?{requests.compat.urlencode(self.params)}"
+        return f"{self.base_url}/appls/legislacao/secoge/govato.nsf/{norm_type_id}?{urlencode(self.params)}{year_index}"
 
-    def _get_docs_links(self, norm_type: str, url: str) -> list:
+    def _get_docs_links(self, url: str) -> list:
         """Get documents html links from given page.
         Returns a list of dicts with keys 'title', 'summary', 'html_link'
         """
@@ -95,7 +93,7 @@ class MSAlemsScraper(BaseScaper):
         """Get document data from given doc info"""
         # remove html_link from doc_info
         html_link = doc_info.pop("html_link")
-        url = requests.compat.urljoin(self.base_url, html_link)
+        url = urljoin(self.base_url, html_link)
         soup = self._get_soup(url)
 
         # norm text will be the first p tag in the document
@@ -127,7 +125,7 @@ class MSAlemsScraper(BaseScaper):
         years = []
         table = soup.find("table", border="0", cellpadding="2", cellspacing="0")
         items = table.find_all("tr", valign="top")
-        for index, item in enumerate(items):
+        for _, item in enumerate(items):
             td = item.find("td")
             year = td.text.strip()
 
@@ -148,7 +146,7 @@ class MSAlemsScraper(BaseScaper):
         situation: str,
     ):
         url = self._format_search_url(norm_type_id, year_index)
-        docs = self._get_docs_links(norm_type, url)
+        docs = self._get_docs_links(url)
 
         # Get document data
         results = []
@@ -187,6 +185,11 @@ class MSAlemsScraper(BaseScaper):
 
     def scrape(self) -> list:
         """Scrape data from all years"""
+        if not self.saver:
+            raise ValueError(
+                "Saver is not initialized. Call _initialize_saver() first."
+            )
+
         # start saver thread
         self.saver.start()
 
@@ -208,7 +211,7 @@ class MSAlemsScraper(BaseScaper):
         ):
             for norm_type, norm_type_id in tqdm(
                 self.types.items(),
-                desc=f"MATO GROSSO DO SUL | Types",
+                desc="MATO GROSSO DO SUL | Types",
                 total=len(self.types),
                 disable=not self.verbose,
             ):
@@ -219,7 +222,7 @@ class MSAlemsScraper(BaseScaper):
                 for year_index, year in enumerate(
                     tqdm(
                         years,
-                        desc=f"MATO GROSSO DO SUL | Year",
+                        desc="MATO GROSSO DO SUL | Year",
                         total=len(years),
                         disable=not self.verbose,
                     )

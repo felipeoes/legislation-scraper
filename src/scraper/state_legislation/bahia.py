@@ -75,7 +75,7 @@ class BahiaLegislaScraper(BaseScaper):
 
         if not soup:
             raise ValueError(f"Failed to get soup for URL: {url}")
-        
+
         docs = []
 
         # check if the page is empty ("Nenhum resultado encontrado")
@@ -88,7 +88,7 @@ class BahiaLegislaScraper(BaseScaper):
             tds = item.find_all("td")
             if len(tds) != 2:
                 continue
-            
+
             title = tds[0].find("b").text
             html_link = tds[0].find("a")["href"]
 
@@ -111,34 +111,34 @@ class BahiaLegislaScraper(BaseScaper):
         if not response:
             print(f"Failed to get document data from URL: {url}")
             return None
-        
+
         soup = BeautifulSoup(response.content, "html.parser")
 
         # get norm_number, date, publication_date and summary
         norm_number = soup.find("div", class_="field--name-field-numero-doc")
         if norm_number:
-            norm_number = norm_number.find("div", class_="field--item") # type: ignore
+            norm_number = norm_number.find("div", class_="field--item")  # type: ignore
 
         date = soup.find("div", class_="field--name-field-data-doc")
         if date:
-            date = date.find("div", class_="field--item") # type: ignore
+            date = date.find("div", class_="field--item")  # type: ignore
 
         publication_date = soup.find(
             "div", class_="field--name-field-data-de-publicacao-no-doe"
         )
         if publication_date:
-            publication_date = publication_date.find("div", class_="field--item") # type: ignore
+            publication_date = publication_date.find("div", class_="field--item")  # type: ignore
 
         summary = soup.find("div", class_="field--name-field-ementa")
         if summary:
-            summary = summary.find("div", class_="field--item") # type: ignore
+            summary = summary.find("div", class_="field--item")  # type: ignore
 
         # get html string and text markdown
         # class="visivel-separador field field--name-body field--type-text-with-summary field--label-hidden field--item"
         norm_text_tag = soup.find("div", class_="field--name-body")
         if not norm_text_tag:
-            return None # invalid norm
-        
+            return None  # invalid norm
+
         html_string = f"<html>{norm_text_tag.prettify()}</html>"
 
         buffer = BytesIO()
@@ -149,7 +149,9 @@ class BahiaLegislaScraper(BaseScaper):
 
         doc_info["norm_number"] = norm_number.text.strip() if norm_number else ""
         doc_info["date"] = date.text.strip() if date else ""
-        doc_info["publication_date"] = publication_date.text.strip() if publication_date else ""
+        doc_info["publication_date"] = (
+            publication_date.text.strip() if publication_date else ""
+        )
         doc_info["summary"] = summary.text.strip() if summary else ""
         doc_info["html_string"] = html_string
         doc_info["text_markdown"] = text_markdown

@@ -1,11 +1,9 @@
-import requests
-import fitz
-
-from io import BytesIO
-from bs4 import BeautifulSoup
+from typing import Optional, Union
+from bs4 import BeautifulSoup, Tag, NavigableString
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from tqdm import tqdm
+from urllib.parse import urlencode, urljoin
 from src.scraper.base.scraper import BaseScaper
 
 TYPES = {
@@ -59,10 +57,11 @@ class LegislaGoias(BaseScaper):
         self.params["ano"] = year
         self.params["tipo_legislacao"] = norm_type_id
         self.params["page"] = page
+        return f"{self.base_url}?{urlencode(self.params)}"
 
-        return f"{self.base_url}?{requests.compat.urlencode(self.params)}"
-
-    def _get_norm_text_tag(self, soup: BeautifulSoup) -> BeautifulSoup:
+    def _get_norm_text_tag(
+        self, soup: BeautifulSoup
+    ) -> Optional[Union[Tag, NavigableString]]:
         """Get the tag containing the norm text. Currently there are 3 possible classes for the tag"""
         norm_text_tag = soup.find("div", class_="folha")
         if norm_text_tag:
@@ -109,7 +108,7 @@ class LegislaGoias(BaseScaper):
 
                 # if not schema in pdf link, add it
                 if not pdf_link.startswith("http"):
-                    pdf_link = requests.compat.urljoin(self.base_url, pdf_link)
+                    pdf_link = urljoin(self.base_url, pdf_link)
 
                 pdf_content = self._make_request(pdf_link).content
                 text_markdown = self._get_pdf_image_markdown(pdf_content)
@@ -140,9 +139,15 @@ class LegislaGoias(BaseScaper):
 
         return doc_info
 
-    def _get_doc_data(self, url: str, norm_url_suffix: str) -> list:
+    def _get_doc_data(self, url: str, norm_url_suffix: str) -> list[dict]:
         """Get document data from given url"""
-        response = self._make_request(url).json()
+        response = self._make_request(url)
+
+        if not response:
+            print(f"Error getting data from URL: {url}")
+            return []
+
+        response = response.json()
 
         total_results = response["total_resultados"]
         if total_results == 0:
@@ -181,6 +186,10 @@ class LegislaGoias(BaseScaper):
             norm_type_id = norm_type_data["id"]
             url = self._format_search_url(norm_type_id, year, 0)
             response = self._make_request(url)
+
+            if not response:
+                print(f"Error getting data for Year: {year} | Type: {norm_type}")
+                continue
 
             data = response.json()
             total_results = data["total_resultados"]

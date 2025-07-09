@@ -169,7 +169,7 @@ class AcreLegisScraper(BaseScaper):
                     doc_info = self._get_state_constitution(norm_type_id)
                     doc_info["situation"] = situation
                     doc_info["type"] = norm_type
-                    
+
                     self.queue.put(doc_info)
                     self.results.append(doc_info)
                     continue

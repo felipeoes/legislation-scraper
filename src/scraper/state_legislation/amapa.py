@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests.compat
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
-from typing import Union, Dict, Optional
+from typing import Union, Dict
 
 
 TYPES = {
@@ -20,7 +20,9 @@ VALID_SITUATIONS = [
     "Não consta"
 ]  # Alap does not have a situation field, invalid norms will have an indication in the document text
 
-INVALID_SITUATIONS = []  # norms with these situations are invalid norms (no longer have legal effect)
+INVALID_SITUATIONS = (
+    []
+)  # norms with these situations are invalid norms (no longer have legal effect)
 
 # the reason to have invalid situations is in case we need to train a classifier to predict if a norm is valid or something else similar
 SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
@@ -136,13 +138,13 @@ class AmapaAlapScraper(BaseScaper):
         buffer.seek(0)
 
         text_markdown = self._get_markdown(stream=buffer)
-        
+
         doc_info["html_string"] = html_string
         doc_info["text_markdown"] = text_markdown
         doc_info["document_url"] = url
 
         return doc_info
-    
+
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
         for situation in tqdm(
@@ -165,11 +167,11 @@ class AmapaAlapScraper(BaseScaper):
 
                 # Get documents html links
                 documents = []
-                
+
                 while not self.reached_end_page:
                     current_page = 1
                     page_docs = []
-                    
+
                     with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                         futures = [
                             executor.submit(
@@ -188,17 +190,19 @@ class AmapaAlapScraper(BaseScaper):
                             docs = future.result()
                             if docs:
                                 page_docs.extend(docs)
-                    
+
                     # If we didn't get any docs or reached the end page, break the loop
                     if not page_docs or self.reached_end_page:
                         break
-                        
+
                     # Add the documents from this batch to our total documents list
                     documents.extend(page_docs)
-                    
+
                     # Move to the next batch of pages
                     current_page += total_pages
-                    total_pages = min(total_pages + 2, self.max_workers)  # Gradually increase pages but don't exceed max_workers
+                    total_pages = min(
+                        total_pages + 2, self.max_workers
+                    )  # Gradually increase pages but don't exceed max_workers
 
                 # Only process documents if we found any
                 if documents:

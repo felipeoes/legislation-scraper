@@ -151,7 +151,7 @@ class ParanaCVScraper(BaseScaper):
                 time.sleep(5)
 
                 break
-            except Exception as e:
+            except Exception:
                 time.sleep(2)
                 retries -= 1
 
@@ -196,7 +196,7 @@ class ParanaCVScraper(BaseScaper):
             print("Found premium popup, skipping it")
             skip_button.click()
             time.sleep(1)
-        except Exception as e:
+        except Exception:
             pass
 
         # check if dialog appears and close it
@@ -209,7 +209,7 @@ class ParanaCVScraper(BaseScaper):
             print("Found rate us dialog, closing it")
             close_button.click()
             time.sleep(1)
-        except Exception as e:
+        except Exception:
             pass
 
         connect_button_selector = (
@@ -243,7 +243,7 @@ class ParanaCVScraper(BaseScaper):
             )
             continue_button.click()
             time.sleep(1)
-        except Exception as e:
+        except Exception:
             pass
 
         # randomly select a country
@@ -470,14 +470,14 @@ class ParanaCVScraper(BaseScaper):
         driver = self._get_available_driver()
 
         if page > 1:
-            while not f"indice={page}" in driver.current_url:
+            while f"indice={page}" not in driver.current_url:
                 self._search_norms(url, year, norm_type_id, driver)
                 self._selenium_click_page(page, driver)
 
                 self._handle_blocked_access(driver)
                 time.sleep(5)
         else:
-            while not "#resultado" in driver.current_url:
+            while "#resultado" not in driver.current_url:
                 self._search_norms(url, year, norm_type_id, driver)
 
         soup = BeautifulSoup(driver.page_source, "html.parser")

@@ -178,8 +178,8 @@ class ESAlesScraper(BaseScaper):
                 {
                     "title": re.sub(r"\r\n +", " ", title.strip()),
                     "summary": summary.strip(),
-                    "date": date,
-                    "authors": authors,
+                    "date": date.strip(),
+                    "authors": authors.strip(),
                     "doc_link": doc_link,
                 }
             )

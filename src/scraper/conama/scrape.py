@@ -1,4 +1,3 @@
-import requests
 import urllib.parse
 from typing import Dict, List, Optional
 
@@ -38,8 +37,11 @@ class ConamaScraper(BaseScaper):
     def __init__(
         self,
         base_url: str = "https://conama.mma.gov.br/",
-        **kwargs,    ):
-        super().__init__(base_url, types=list(TYPES.keys()), situations=SITUATIONS, **kwargs)
+        **kwargs,
+    ):
+        super().__init__(
+            base_url, types=list(TYPES.keys()), situations=SITUATIONS, **kwargs
+        )
         self.params = {
             "option": "com_sisconama",
             "order": "asc",
@@ -54,7 +56,7 @@ class ConamaScraper(BaseScaper):
         """Format url for search request"""
         return f"{self.base_url}?option={self.params['option']}&order={self.params['order']}&offset={self.params['offset']}&limit={self.params['limit']}&task={self.params['task']}&tipo={TYPES[norm_type]}&ano={self.params['ano']}"
 
-    def _get_doc_data(self, doc_info: dict) -> Optional[Dict]:  
+    def _get_doc_data(self, doc_info: dict) -> Optional[Dict]:
         """Get document data from norm dict. Download url for pdf will follow the pattern: https://conama.mma.gov.br/?option=com_sisconama&task=arquivo.download&id={id}"""
         doc_id = doc_info["aid"]
         doc_number = doc_info["numero"]
@@ -91,7 +93,7 @@ class ConamaScraper(BaseScaper):
         """Scrape norms for a specific year"""
         results = []
         year_str = str(year)
-        
+
         for situation in tqdm(
             self.situations,
             desc="CONAMA | Situations",
@@ -116,7 +118,7 @@ class ConamaScraper(BaseScaper):
 
                 norms = []
                 norms.extend(data["rows"])
-                
+
                 # get all norms
                 while self.params["offset"] < total_norms:
                     self.params["offset"] += self.params["limit"]
@@ -163,5 +165,5 @@ class ConamaScraper(BaseScaper):
                         print(
                             f"Year: {year_str} | Type: {norm_type} | Situation: {situation} | Total: {len(type_results)}"
                         )
-        
+
         return results

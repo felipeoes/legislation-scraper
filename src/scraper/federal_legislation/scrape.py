@@ -1,17 +1,11 @@
-import requests
-import time
 from io import BytesIO
 from typing import Optional
-from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin
-from bs4 import BeautifulSoup
-from markitdown import MarkItDown
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-from multiprocessing import Queue
 from src.scraper.base.scraper import BaseScaper
-from src.database.saver import OneDriveSaver, ONEDRIVE_SAVE_DIR
+from src.database.saver import ONEDRIVE_SAVE_DIR
 
 VALID_SITUATIONS = [
     "Não%20consta%20revogação%20expressa",

@@ -203,7 +203,7 @@ class RSAlrsScraper(BaseScaper):
 
         text_markdown = self._get_markdown(url)
         if not text_markdown or not text_markdown.strip():
-            print(f"Error getting markdown for state constitution")
+            print("Error getting markdown for state constitution")
             return None
 
         # save to one drive

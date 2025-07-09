@@ -351,7 +351,7 @@ class CearaAleceScraper(BaseScaper):
         ):
             for norm_type, norm_type_id in tqdm(
                 self.types.items(),
-                desc=f"CEARA | Types",
+                desc="CEARA | Types",
                 total=len(self.types),
                 disable=not self.verbose,
             ):
@@ -389,7 +389,7 @@ class CearaAleceScraper(BaseScaper):
 
                     for year in tqdm(
                         available_years,
-                        desc=f"CEARA | Years",
+                        desc="CEARA | Years",
                         total=len(self.years),
                         disable=not self.verbose,
                     ):

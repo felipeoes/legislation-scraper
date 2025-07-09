@@ -1,4 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, Any, List
+
 from tqdm import tqdm
 from src.scraper.base.scraper import BaseScaper
 
@@ -19,30 +21,7 @@ TYPES = {
     "Resolução": 4,
 }
 
-# Alpb does not have a situation field, it will be inferred from the norm data
-VALID_SITUATIONS = []
-
-INVALID_SITUATIONS = (
-    []
-)  # norms with these situations are invalid norms (no longer have legal effect)
-
-SITUATIONS = VALID_SITUATIONS + INVALID_SITUATIONS
-
-
-# SUBJECTS = {
-#     1: "Não classificada",
-#     50: "Administração Pública do Estado da Paraíba",
-#     19: "Agropecuária",
-#     66: "Câmaras Municipais do Estado da Paraíba",
-#     157: "Certificado de Congratulações",
-#     113: "Certificado de Excelência Ecológica",
-#     101: "Certificado de Qualidade em Serviço Público Municipal",
-#     153: "Certificado de Reconhecimento de Atividade de Relevante Interesse Ambiental",
-#     117: "Certificado de Responsabilidade Social",
-#     55: "Cidadania",
-#     76: "Cidadão Paraibano",
-# }
-
+SITUATIONS = []
 
 class ParaibaAlpbScraper(BaseScaper):
     """Webscraper for Paraíba state legislation website (https://sapl3.al.pb.leg.br/)
@@ -59,18 +38,11 @@ class ParaibaAlpbScraper(BaseScaper):
     def __init__(
         self,
         base_url: str = "https://sapl3.al.pb.leg.br",
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(base_url, types=TYPES, situations=SITUATIONS, **kwargs)
         self.docs_save_dir = self.docs_save_dir / "PARAIBA"
-        self.params = {
-            "tipo": "",
-            "ano": "",
-            "page": 1,
-        }
-        # https://sapl3.al.pb.leg.br/api/norma/assuntonorma/
-        # subjects are fetched at running time from the above link
-        self.subjects = {}
+        self.subjects: Dict[int, str] = {}
         self._initialize_saver()
 
     def _format_search_url(
@@ -83,127 +55,98 @@ class ParaibaAlpbScraper(BaseScaper):
         return f"{self.base_url}/api/norma/normajuridica/?tipo={norm_type_id}&page={page}&ano={year}"
 
     def _get_docs_links(self, url: str) -> list:
-        """Get document links from search request. Returns a list of dicts with keys 'id', 'title', 'situation', 'summary', 'subject', 'date', 'origin', 'publication', 'pdf_link'"""
-
+        """Get document links from search request."""
         response = self._make_request(url)
+        items = response.json().get("results", [])
         docs = []
 
-        items = response.json()["results"]
-        #     "results": [
-        # {
-        #   "id": 17498,
-        #   "__str__": "Lei Ordinária nº 13.578, de 06 de março de 2025",
-        #   "metadata": {
-
-        #   },
-        #   "texto_integral": "https://sapl3.al.pb.leg.br/media/sapl/public/normajuridica/2025/17498/lei_13.578.pdf",
-        #   "numero": "13578",
-        #   "ano": 2025,
-        #   "esfera_federacao": "E",
-        #   "data": "2025-03-06",
-        #   "data_publicacao": "2025-03-07",
-        #   "veiculo_publicacao": "DOE",
-        #   "pagina_inicio_publicacao": 2,
-        #   "pagina_fim_publicacao": 2,
-        #   "ementa": "Institui o Programa Estadual de Prevenção ao Alcoolismo entre Mulheres e dá outras providências.",
-        #   "indexacao": "",
-        #   "observacao": "",
-        #   "complemento": false,
-        #   "data_vigencia": null,
-        #   "timestamp": "2025-03-10T14:10:13.495389-03:00",
-        #   "data_ultima_atualizacao": "2025-03-10T14:10:13.496944-03:00",
-        #   "ip": "10.83.19.254",
-        #   "ultima_edicao": "2025-03-10T14:10:13.485620-03:00",
-        #   "tipo": 2,
-        #   "materia": 115040,
-        #   "orgao": null,
-        #   "user": 191,
-        #   "assuntos": [34, 25, 14],
-        #   "autores": []
-        # },
-
-        situation = "Não consta revogação expressa"  # default valid situation
         for item in items:
-            
-            if item['texto_integral'] is None: # no link norm text, skip it
+            if not item.get("texto_integral"):
                 continue
 
-            # infer situation from data_vigencia
-            if item["data_vigencia"] is not None:
-                situation = "Revogada"  # just to know the norm is invalid
-        
-            
+            situation = (
+                "Revogada"
+                if item.get("data_vigencia")
+                else "Não consta revogação expressa"
+            )
+
             doc = {
                 "id": item["id"],
                 "norm_number": item["numero"],
                 "title": item["__str__"],
                 "situation": situation,
                 "summary": item["ementa"],
-                "subject": [self.subjects[subject] for subject in item["assuntos"]],
+                "subject": [self.subjects.get(s, "") for s in item.get("assuntos", [])],
                 "date": item["data"],
-                "origin": item[
-                    "esfera_federacao"
-                ],  # E for Executivo, L for Legislativo, J for Judiciário
-                "publication": item["veiculo_publicacao"],
+                "origin": item.get("esfera_federacao"),
+                "publication": item.get("veiculo_publicacao"),
                 "pdf_link": item["texto_integral"],
             }
             docs.append(doc)
 
         return docs
 
-    def _get_doc_data(self, doc_info: dict, year: int) -> dict:
-        """Get document data"""
-        # remove pdf_link from doc_info
-        pdf_link = doc_info.pop("pdf_link")
-
+    def _process_pdf(self, pdf_link: str, year: int) -> dict:
+        """Process PDF and return text markdown."""
         response = self._make_request(pdf_link)
-        if not response.content: # invalid pdf
+        if not response.content:
             return None
-        # if year is until 1990, the default method for getting text markdown will be image pdf
+
         if year <= 1990:
             text_markdown = self._get_pdf_image_markdown(response.content)
         else:
             text_markdown = self._get_markdown(response=response)
-
             if not text_markdown:
-                # probably an image pdf, even after 1990
                 text_markdown = self._get_pdf_image_markdown(response.content)
 
-        if (
-            not text_markdown or not text_markdown.strip()
-        ):  # indeed an invalid or unavailable pdf
+        if not text_markdown or not text_markdown.strip():
             return None
 
-        doc_info["text_markdown"] = text_markdown
-        doc_info["document_url"] = pdf_link
+        return {
+            "text_markdown": text_markdown,
+            "document_url": pdf_link,
+        }
 
+    def _get_doc_data(self, doc_info: dict, year: int) -> dict:
+        """Get document data"""
+        pdf_link = doc_info.pop("pdf_link")
+        processed_pdf = self._process_pdf(pdf_link, year)
+
+        if processed_pdf is None:
+            return None
+
+        doc_info.update(processed_pdf)
         return doc_info
+
+    def _fetch_subjects(self):
+        """Fetch all subjects from the API."""
+        if self.subjects:
+            return
+
+        subjects_url = f"{self.base_url}/api/norma/assuntonorma/"
+        response = self._make_request(subjects_url)
+        data = response.json()
+        total_pages = data["pagination"]["total_pages"]
+
+        subjects = {item["id"]: item["assunto"] for item in data["results"]}
+
+        for page in tqdm(
+            range(2, total_pages + 1),
+            desc="PARAIBA | Fetching subjects",
+            total=total_pages,
+            disable=not self.verbose,
+        ):
+            response = self._make_request(f"{subjects_url}?page={page}")
+            data = response.json()
+            subjects.update(
+                {item["id"]: item["assunto"] for item in data["results"]}
+            )
+
+        self.subjects = subjects
 
     def _scrape_year(self, year: int):
         """Scrape norms for a specific year"""
-
-        # check if subjects have been fetched
-        if not self.subjects:
-            subjects_url = f"{self.base_url}/api/norma/assuntonorma/"
-            response = self._make_request(subjects_url)
-            data = response.json()
-            total_pages = data["pagination"]["total_pages"]
-
-            subjects = {item["id"]: item["assunto"] for item in data["results"]}
-
-            for page in tqdm(
-                range(2, total_pages + 1),
-                desc="PARAIBA | Fetching subjects",
-                total=total_pages,
-                disable=not self.verbose,
-            ):
-                response = self._make_request(f"{subjects_url}?page={page}")
-                data = response.json()
-                subjects.update(
-                    {item["id"]: item["assunto"] for item in data["results"]}
-                )
-
-            self.subjects = subjects
+        self._fetch_subjects()
 
         for norm_type, norm_type_id in tqdm(
             self.types.items(),
@@ -211,26 +154,20 @@ class ParaibaAlpbScraper(BaseScaper):
             total=len(self.types),
             disable=not self.verbose,
         ):
-
             url = self._format_search_url(norm_type_id, year)
-
-            # get total number of pages
             response = self._make_request(url)
-            if response.status_code == 400:  # no norms for this year
+
+            if response.status_code == 400:
                 continue
 
             data = response.json()
-
-            if len(data["results"]) == 0:
+            if not data.get("results"):
                 continue
 
             total_pages = data["pagination"]["total_pages"]
-
-            documents = []
-
-            # get all norms
+            
             with ThreadPoolExecutor() as executor:
-                futures = [
+                doc_links_futures = [
                     executor.submit(
                         self._get_docs_links,
                         self._format_search_url(norm_type_id, year, page=page),
@@ -238,44 +175,32 @@ class ParaibaAlpbScraper(BaseScaper):
                     for page in range(1, total_pages + 1)
                 ]
 
+                documents = []
                 for future in tqdm(
-                    as_completed(futures),
+                    as_completed(doc_links_futures),
                     desc="PARAIBA | Get document links",
-                    total=len(futures),
+                    total=len(doc_links_futures),
                     disable=not self.verbose,
                 ):
-                    result = future.result()
-                    documents.extend(result)
+                    documents.extend(future.result())
 
-            results = []
-
-            # get all norm data
-            with ThreadPoolExecutor() as executor:
-                futures = [
+                doc_data_futures = [
                     executor.submit(self._get_doc_data, doc_info, year)
                     for doc_info in documents
                 ]
 
+                results = []
                 for future in tqdm(
-                    as_completed(futures),
+                    as_completed(doc_data_futures),
                     desc="PARAIBA | Get document data",
-                    total=len(futures),
+                    total=len(doc_data_futures),
                     disable=not self.verbose,
                 ):
                     result = future.result()
-                    
-                    if result is None:
-                        continue
-
-                    # save to one drive
-                    queue_item = {
-                        "year": year,
-                        "type": norm_type,
-                        **result,
-                    }
-
-                    self.queue.put(queue_item)
-                    results.append(queue_item)
+                    if result:
+                        queue_item = {"year": year, "type": norm_type, **result}
+                        self.queue.put(queue_item)
+                        results.append(queue_item)
 
             self.results.extend(results)
             self.count += len(results)
